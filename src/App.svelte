@@ -9,7 +9,9 @@
     FileCode, 
     Lock, 
     ChevronUp,
-    VideoIcon
+    VideoIcon,
+    Eye, 
+    EyeOff
   } from "@lucide/svelte";
   import * as Resizable from "$lib/components/ui/resizable";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
@@ -23,9 +25,13 @@
     is_dir: boolean;
     has_permission: boolean;
   }
-
+  
+  let showHidden = $state(false);
   let desktopPath = $state("/");
   let files = $state<FileEntry[]>([]);
+  let visibleFiles = $derived(
+    showHidden ? files : files.filter(f => !f.name.startsWith('.'))
+  );
   let androidSerial = $state("Not Connected");
 
   async function loadDirectory(path: string) {
@@ -56,7 +62,6 @@
     } else {
       return File;
     };
-
   }
 
   onMount(() => loadDirectory(desktopPath));
@@ -73,6 +78,19 @@
             <span class="font-semibold text-sm">Local Desktop</span>
           </div>
           <div class="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                class="h-7 w-7 {showHidden ? 'text-blue-500' : 'text-muted-foreground'}" 
+                onclick={() => showHidden = !showHidden}
+                title={showHidden ? "Hide Hidden Files" : "Show Hidden Files"}
+              >
+                {#if showHidden}
+                  <Eye size={14} />
+                {:else}
+                  <EyeOff size={14} />
+                {/if}
+              </Button>
              <Button variant="ghost" size="icon" class="h-7 w-7" onclick={goUp}>
                 <ChevronUp size={14} />
              </Button>
@@ -84,7 +102,7 @@
         
         <ScrollArea class="flex-1 h-full w-full">
           <div class="p-4 grid grid-cols-1 gap-1">
-            {#each files as file (file.path)}
+            {#each visibleFiles as file (file.path)}
               {@const Icon = getFileIcon(file)}
               <button 
                 onclick={() => file.is_dir && file.has_permission && loadDirectory(file.path)}
@@ -124,7 +142,7 @@
 
   <div class="px-4 py-2 border-t bg-muted/30 flex justify-between items-center text-[11px] h-10">
     <div class="flex gap-4">
-      <span>Files: {files.length}</span>
+      <span>Files: {visibleFiles.length}</span>
     </div>
     <div class="flex items-center gap-2">
       <div class="w-2 h-2 rounded-full bg-green-500"></div>
