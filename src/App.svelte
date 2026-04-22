@@ -31,13 +31,21 @@
     has_permission: boolean;
   }
   
+  const storedPath = typeof localStorage !== 'undefined' 
+    ? localStorage.getItem("lastDesktopPath") ?? "/" 
+    : "/";
+  let desktopPath = $state(storedPath);
+
   let showHidden = $state(false);
-  let desktopPath = $state("/");
   let files = $state<FileEntry[]>([]);
   let visibleFiles = $derived(
     showHidden ? files : files.filter(f => !f.name.startsWith('.'))
   );
   let androidSerial = $state("Not Connected");
+
+  $effect(() => {
+    localStorage.setItem("lastDesktopPath", desktopPath);
+  });
 
   async function loadDirectory(path: string) {
     try {
@@ -46,6 +54,10 @@
       desktopPath = path;
     } catch (err) {
       console.error("Failed to list directory:", err);
+      if (path !== "/") {
+        console.warn("Path not found, reverting to root");
+        loadDirectory("/");
+      }
     }
   }
 
