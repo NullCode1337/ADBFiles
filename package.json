@@ -1,11 +1,11 @@
 {
-	"name": "tauri2-svelte5-shadcn",
+	"name": "adbfiles",
 	"private": true,
-	"version": "2.0.0",
-	"description": "A simple desktop application template combining Tauri 2 with Svelte 5 and shadcn-svelte with a basic ci/cd implemented.",
+	"version": "0.0.1",
+	"description": "Dead simple Android file explorer using ADB",
 	"author": {
-		"name": "Alysonhower Veras Vieira",
-		"email": "contato@alysonhower.dev"
+		"name": "NullCode1337",
+		"email": "nullcode1337@proton.me"
 	},
 	"type": "module",
 	"scripts": {

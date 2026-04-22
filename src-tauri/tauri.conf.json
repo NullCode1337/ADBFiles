@@ -1,18 +1,18 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "tauri2-svelte5-shadcn",
-  "version": "2.0.0",
-  "identifier": "com.tauri2-svelte5-shadcn.dev",
+  "productName": "adbfiles",
+  "version": "0.0.1",
+  "identifier": "com.nullcode1337.adbfiles",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun run build"
   },
   "app": {
     "windows": [
       {
-        "title": "tauri2-svelte5-shadcn",
+        "title": "ADBFiles",
         "width": 800,
         "height": 600,
         "resizable": true,
