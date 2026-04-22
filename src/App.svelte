@@ -1,9 +1,20 @@
 <script lang="ts">
-  import { Monitor, Smartphone, RefreshCw, Folder, Lock, ChevronUp } from "@lucide/svelte";
+  import { 
+    Monitor, 
+    Smartphone, 
+    RefreshCw, 
+    Folder, 
+    File, 
+    FileText, 
+    ImageIcon, 
+    FileCode, 
+    Lock, 
+    ChevronUp,
+    VideoIcon
+  } from "@lucide/svelte";
   import * as Resizable from "$lib/components/ui/resizable";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Button } from "$lib/components/ui/button";
-  import { Badge } from "$lib/components/ui/badge";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
 
@@ -34,17 +45,32 @@
     loadDirectory("/" + parts.join('/'));
   }
 
+  function getFileIcon(file: FileEntry) {
+    if (file.is_dir) return Folder;
+    
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (['png', 'jpg', 'gif', 'svg'].includes(ext)) return ImageIcon;
+    if (['ts', 'js', 'py', 'rs', 'c', 'cpp', 'json'].includes(ext)) return FileCode;
+    if (['txt', 'md', 'pdf', 'doc', 'docx', 'ppt', 'xlsx'].includes(ext)) return FileText;
+    if (['mp4', 'wav', 'av1', 'mpeg'].includes(ext)) {
+      return VideoIcon;
+    } else {
+      return File;
+    };
+
+  }
+
   onMount(() => loadDirectory(desktopPath));
 </script>
 
 <div class="h-screen w-screen overflow-hidden bg-background flex flex-col">
   <Resizable.PaneGroup direction="horizontal" class="flex-1">
     
-    <Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col border-r">
-      <div class="flex flex-col h-full bg-muted/5">
-        <div class="p-4 border-b bg-background flex items-center justify-between h-14">
+    <Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col">
+      <div class="flex flex-col h-full min-h-0 bg-muted/5">
+        <div class="p-4 border-b bg-background flex items-center justify-between h-14 flex-shrink-0">
           <div class="flex items-center gap-2">
-            <Monitor size={16} class="text-blue-500" />
+            <Monitor size={18} class="text-blue-500" />
             <span class="font-semibold text-sm">Local Desktop</span>
           </div>
           <div class="flex items-center gap-2">
@@ -57,9 +83,10 @@
           </div>
         </div>
         
-        <ScrollArea class="flex-1">
-          <div class="p-2 grid grid-cols-1 gap-1">
+        <ScrollArea class="flex-1 h-full w-full">
+          <div class="p-4 grid grid-cols-1 gap-1">
             {#each files as file}
+              {@const Icon = getFileIcon(file)}
               <button 
                 onclick={() => file.is_dir && file.has_permission && loadDirectory(file.path)}
                 disabled={!file.has_permission}
@@ -67,7 +94,10 @@
                        {file.has_permission ? 'hover:bg-accent cursor-pointer' : 'opacity-40 cursor-not-allowed bg-zinc-100/50'}"
               >
                 <div class="flex items-center gap-3">
-                  <Folder size={16} class={file.is_dir ? "text-blue-400" : "text-zinc-400"} />
+                  <Icon 
+                    size={16} 
+                    class={file.is_dir ? "text-blue-400" : "text-zinc-400"} 
+                  />
                   <span class="truncate">{file.name}</span>
                 </div>
                 {#if !file.has_permission}
@@ -83,7 +113,13 @@
     <Resizable.Handle withHandle />
 
     <Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col">
-      </Resizable.Pane>
+      <div class="flex items-center justify-center h-full text-muted-foreground text-sm">
+        <div class="flex flex-col items-center gap-2">
+          <Smartphone size={40} class="opacity-20" />
+          <p>Connect a device via ADB</p>
+        </div>
+      </div>
+    </Resizable.Pane>
 
   </Resizable.PaneGroup>
 
@@ -93,7 +129,7 @@
     </div>
     <div class="flex items-center gap-2">
       <div class="w-2 h-2 rounded-full bg-green-500"></div>
-      <span class="text-muted-foreground">ADB Active</span>
+      <span class="text-muted-foreground">ADB Active: {androidSerial}</span>
     </div>
   </div>
 </div>
