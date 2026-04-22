@@ -2,7 +2,6 @@
   import { 
     Monitor, 
     Smartphone, 
-    RefreshCw, 
     Folder, 
     File, 
     FileText, 
@@ -48,7 +47,7 @@
   function getFileIcon(file: FileEntry) {
     if (file.is_dir) return Folder;
     
-    const ext = file.name.split('.').pop()?.toLowerCase();
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? "file";
     if (['png', 'jpg', 'gif', 'svg'].includes(ext)) return ImageIcon;
     if (['ts', 'js', 'py', 'rs', 'c', 'cpp', 'json'].includes(ext)) return FileCode;
     if (['txt', 'md', 'pdf', 'doc', 'docx', 'ppt', 'xlsx'].includes(ext)) return FileText;
@@ -68,7 +67,7 @@
     
     <Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col">
       <div class="flex flex-col h-full min-h-0 bg-muted/5">
-        <div class="p-4 border-b bg-background flex items-center justify-between h-14 flex-shrink-0">
+        <div class="p-4 border-b bg-background flex items-center justify-between h-14 shrink-0">
           <div class="flex items-center gap-2">
             <Monitor size={18} class="text-blue-500" />
             <span class="font-semibold text-sm">Local Desktop</span>
@@ -85,7 +84,7 @@
         
         <ScrollArea class="flex-1 h-full w-full">
           <div class="p-4 grid grid-cols-1 gap-1">
-            {#each files as file}
+            {#each files as file (file.path)}
               {@const Icon = getFileIcon(file)}
               <button 
                 onclick={() => file.is_dir && file.has_permission && loadDirectory(file.path)}
