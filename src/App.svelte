@@ -1,39 +1,80 @@
 <script lang="ts">
-  import { Monitor, Smartphone, Terminal, HardDrive, RefreshCw, FolderOpen } from "@lucide/svelte";
+  import { Monitor, Smartphone, RefreshCw, Folder, Lock, ChevronUp } from "@lucide/svelte";
   import * as Resizable from "$lib/components/ui/resizable";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
+  import { invoke } from "@tauri-apps/api/core";
+  import { onMount } from "svelte";
 
-  let isConnecting = $state(false);
-  let desktopPath = $state("~/Documents");
+  interface FileEntry {
+    name: string;
+    path: string;
+    is_dir: boolean;
+    has_permission: boolean;
+  }
+
+  let desktopPath = $state("/");
+  let files = $state<FileEntry[]>([]);
   let androidSerial = $state("Not Connected");
 
-  async function refreshDevices() {
-    isConnecting = true;
-    setTimeout(() => { isConnecting = false; }, 1000); 
+  async function loadDirectory(path: string) {
+    try {
+      const result: FileEntry[] = await invoke("list_directory", { path });
+      files = result;
+      desktopPath = path;
+    } catch (err) {
+      console.error("Failed to list directory:", err);
+    }
   }
+
+  function goUp() {
+    const parts = desktopPath.split('/').filter(Boolean);
+    parts.pop();
+    loadDirectory("/" + parts.join('/'));
+  }
+
+  onMount(() => loadDirectory(desktopPath));
 </script>
 
-<div class="h-screen w-screen border overflow-hidden bg-background flex flex-col shadow-2xl">
-  <Resizable.PaneGroup direction="horizontal" class="flex-1 overflow-hidden">
+<div class="h-screen w-screen overflow-hidden bg-background flex flex-col">
+  <Resizable.PaneGroup direction="horizontal" class="flex-1">
     
-    <Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col">
+    <Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col border-r">
       <div class="flex flex-col h-full bg-muted/5">
-        <div class="p-4 border-b bg-background flex items-center justify-between h-14 flex-shrink-0">
+        <div class="p-4 border-b bg-background flex items-center justify-between h-14">
           <div class="flex items-center gap-2">
-            <Monitor size={18} class="text-blue-500" />
+            <Monitor size={16} class="text-blue-500" />
             <span class="font-semibold text-sm">Local Desktop</span>
           </div>
-          <span class="text-[10px] text-muted-foreground font-mono truncate max-w-[50%]">{desktopPath}</span>
+          <div class="flex items-center gap-2">
+             <Button variant="ghost" size="icon" class="h-7 w-7" onclick={goUp}>
+                <ChevronUp size={14} />
+             </Button>
+             <span class="text-[10px] font-mono bg-muted px-2 py-1 rounded truncate max-w-[150px]">
+               {desktopPath}
+             </span>
+          </div>
         </div>
         
-        <ScrollArea class="flex-1 p-4">
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div class="p-8 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-muted-foreground hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer aspect-square">
-              <HardDrive size={24} class="mb-2 opacity-50" />
-              <p class="text-xs">Browse Files</p>
-            </div>
+        <ScrollArea class="flex-1">
+          <div class="p-2 grid grid-cols-1 gap-1">
+            {#each files as file}
+              <button 
+                onclick={() => file.is_dir && file.has_permission && loadDirectory(file.path)}
+                disabled={!file.has_permission}
+                class="flex items-center justify-between p-2 rounded-md text-sm transition-colors
+                       {file.has_permission ? 'hover:bg-accent cursor-pointer' : 'opacity-40 cursor-not-allowed bg-zinc-100/50'}"
+              >
+                <div class="flex items-center gap-3">
+                  <Folder size={16} class={file.is_dir ? "text-blue-400" : "text-zinc-400"} />
+                  <span class="truncate">{file.name}</span>
+                </div>
+                {#if !file.has_permission}
+                  <Lock size={12} class="text-muted-foreground" />
+                {/if}
+              </button>
+            {/each}
           </div>
         </ScrollArea>
       </div>
@@ -42,37 +83,17 @@
     <Resizable.Handle withHandle />
 
     <Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col">
-      <div class="flex flex-col h-full">
-        <div class="p-4 border-b bg-background flex items-center justify-between h-14 flex-shrink-0">
-          <div class="flex items-center gap-2">
-            <Smartphone size={18} class="text-green-500" />
-            <span class="font-semibold text-sm">Android Device</span>
-          </div>
-          <Badge variant="outline" class="text-[10px] font-mono truncate max-w-[50%]">{androidSerial}</Badge>
-        </div>
-
-        <ScrollArea class="flex-1 flex items-center justify-center relative bg-zinc-950">
-          <div class="flex flex-col items-center justify-center h-full w-full text-zinc-500 space-y-4 p-8">
-            <FolderOpen size={48} class="mb-4 opacity-20" />
-            <p class="text-sm italic text-center">No devices available...</p>
-             <Button variant="outline" size="sm" class="mt-4" onclick={refreshDevices}>
-                <RefreshCw size={14} class="mr-2" /> Try Reconnecting
-            </Button>
-          </div>
-        </ScrollArea>
-      </div>
-    </Resizable.Pane>
+      </Resizable.Pane>
 
   </Resizable.PaneGroup>
 
-  <div class="px-4 py-2 border-t bg-muted/30 flex justify-between items-center text-[11px] text-muted-foreground h-10 flex-shrink-0">
+  <div class="px-4 py-2 border-t bg-muted/30 flex justify-between items-center text-[11px] h-10">
     <div class="flex gap-4">
-      <span class="hidden sm:inline">Drive</span>
-      <span class="hidden md:inline">Storage</span>
+      <span>Files: {files.length}</span>
     </div>
-    <div class="flex items-center gap-1">
-      <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-      <span>ADB Server</span>
+    <div class="flex items-center gap-2">
+      <div class="w-2 h-2 rounded-full bg-green-500"></div>
+      <span class="text-muted-foreground">ADB Active</span>
     </div>
   </div>
 </div>
