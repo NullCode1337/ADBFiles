@@ -115,7 +115,7 @@
                 onclick={() => file.is_dir && file.has_permission && loadDirectory(file.path)}
                 disabled={!file.has_permission}
                 class="flex items-center justify-between p-2 rounded-md text-sm transition-colors
-                       {file.has_permission ? 'hover:bg-accent cursor-pointer' : 'opacity-40 cursor-not-allowed bg-zinc-100/50'}"
+                       {file.has_permission ? 'hover:bg-accent cursor-pointer' : 'opacity-40 cursor-not-allowed'}"
               >
                 <div class="flex items-center gap-3">
                   <Icon 
