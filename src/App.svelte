@@ -8,6 +8,8 @@
     ImageIcon, 
     FileCode, 
     Lock, 
+    SunIcon,
+    MoonIcon,
     ChevronUp,
     VideoIcon,
     Eye, 
@@ -17,6 +19,9 @@
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Button } from "$lib/components/ui/button";
   import { invoke } from "@tauri-apps/api/core";
+  
+  import { ModeWatcher, toggleMode } from "mode-watcher";
+  
   import { onMount } from "svelte";
 
   interface FileEntry {
@@ -66,6 +71,8 @@
 
   onMount(() => loadDirectory(desktopPath));
 </script>
+
+<ModeWatcher />
 
 <div class="h-screen w-screen overflow-hidden bg-background flex flex-col">
   <Resizable.PaneGroup direction="horizontal" class="flex-1">
@@ -145,6 +152,14 @@
       <span>Files: {visibleFiles.length}</span>
     </div>
     <div class="flex items-center gap-2">
+      <Button onclick={toggleMode} variant="outline" size="icon">
+        <SunIcon
+          class="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all! dark:scale-0 dark:-rotate-90"
+        />
+        <MoonIcon
+          class="absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all! dark:scale-100 dark:rotate-0"
+        />
+      </Button>
       <div class="w-2 h-2 rounded-full bg-green-500"></div>
       <span class="text-muted-foreground">ADB Active: {androidSerial}</span>
     </div>
