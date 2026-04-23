@@ -1,27 +1,12 @@
 <script lang="ts">
-  import { 
-    Monitor, 
-    Smartphone, 
-    Folder, 
-    File, 
-    FileText, 
-    ImageIcon, 
-    FileCode, 
-    Lock, 
-    SunIcon,
-    MoonIcon,
-    ChevronUp,
-    VideoIcon,
-    Eye, 
-    EyeOff
-  } from "@lucide/svelte";
+  import { Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, ChevronUp, VideoIcon, Eye, EyeOff } from "@lucide/svelte";
+  
   import * as Resizable from "$lib/components/ui/resizable";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Button } from "$lib/components/ui/button";
+  
   import { invoke } from "@tauri-apps/api/core";
-  
   import { ModeWatcher, toggleMode } from "mode-watcher";
-  
   import { onMount } from "svelte";
 
   interface FileEntry {
@@ -31,6 +16,11 @@
     has_permission: boolean;
   }
   
+  interface AdbFile {
+    name: string;
+    is_dir: boolean;
+  }
+
   const storedPath = typeof localStorage !== 'undefined' 
     ? localStorage.getItem("lastDesktopPath") ?? "/" 
     : "/";
@@ -41,7 +31,12 @@
   let visibleFiles = $derived(
     showHidden ? files : files.filter(f => !f.name.startsWith('.'))
   );
+
   let androidSerial = $state("Not Connected");
+  let selectedSerial = $state<string | null>(null);
+  let adbDevices = $state<any[]>([]);
+  let adbFiles = $state<AdbFile[]>([]);
+  let adbPath = $state("/sdcard");
 
   $effect(() => {
     localStorage.setItem("lastDesktopPath", desktopPath);
@@ -59,6 +54,45 @@
         loadDirectory("/");
       }
     }
+  }
+
+  async function refreshDevices() {
+    try {
+      adbDevices = await invoke("list_adb_devices");
+      if (adbDevices.length > 0 && !selectedSerial) {
+        selectedSerial = adbDevices[0].serial;
+        androidSerial = selectedSerial;
+        loadAdbDirectory(adbPath);
+      } else if (adbDevices.length === 0) {
+        selectedSerial = null;
+        androidSerial = "Not Connected";
+        adbFiles = [];
+      }
+    } catch (e) {
+      console.error("ADB Error:", e);
+    }
+  }
+
+  async function loadAdbDirectory(path: string) {
+    if (!selectedSerial) return;
+    try {
+      const cleanPath = path === "/" ? "/" : path.replace(/\/$/, "");
+      
+      const result: AdbFile[] = await invoke("list_adb_directory", { 
+        serial: selectedSerial, 
+        path: cleanPath 
+      });
+      
+      adbFiles = result;
+      adbPath = cleanPath;
+    } catch (err) {
+      console.error("ADB Load Error:", err);
+    }
+  }
+
+  function joinAdbPath(base: string, name: string) {
+    const prefix = base.endsWith('/') ? base : base + '/';
+    return prefix + name;
   }
 
   function goUp() {
@@ -81,7 +115,10 @@
     };
   }
 
-  onMount(() => loadDirectory(desktopPath));
+  onMount(() => {
+    refreshDevices();
+    loadDirectory(desktopPath);
+  });
 </script>
 
 <ModeWatcher />
@@ -149,11 +186,60 @@
     <Resizable.Handle withHandle />
 
     <Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col">
-      <div class="flex items-center justify-center h-full text-muted-foreground text-sm">
-        <div class="flex flex-col items-center gap-2">
-          <Smartphone size={40} class="opacity-20" />
-          <p>Connect a device via ADB</p>
+      <div class="flex flex-col h-full min-h-0 bg-muted/5">
+        <div class="p-4 border-b bg-background flex items-center justify-between h-14 shrink-0">
+          <div class="flex items-center gap-2">
+            <Smartphone size={18} class="text-green-500" />
+            <span class="font-semibold text-sm">Android Device</span>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <Button variant="ghost" size="icon" class="h-7 w-7" onclick={refreshDevices}>
+              <RefreshCw size={14} />
+            </Button>
+            <span class="text-[10px] font-mono bg-muted px-2 py-1 rounded truncate max-w-[150px]">
+              {adbPath}
+            </span>
+          </div>
         </div>
+
+        {#if selectedSerial}
+          <ScrollArea class="flex-1 h-full w-full">
+            <div class="p-4 grid grid-cols-1 gap-1">
+              {#if adbPath !== "/"}
+                <button 
+                  onclick={() => {
+                    const p = adbPath.split('/').filter(Boolean);
+                    p.pop();
+                    loadAdbDirectory("/" + p.join('/'));
+                  }}
+                  class="flex items-center gap-3 p-2 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronUp size={16} /> ..
+                </button>
+              {/if}
+
+              {#each adbFiles as file (file.name)}
+                <button 
+                  onclick={() => file.is_dir && loadAdbDirectory(joinAdbPath(adbPath, file.name))}
+                  class="flex items-center gap-3 p-2 rounded-md text-sm hover:bg-accent transition-colors"
+                >
+                  {#if file.is_dir}
+                    <Folder size={16} class="text-green-400" />
+                  {:else}
+                    <File size={16} class="text-zinc-400" />
+                  {/if}
+                  <span class="truncate">{file.name}</span>
+                </button>
+              {/each}
+            </div>
+          </ScrollArea>
+        {:else}
+          <div class="flex-1 flex flex-col items-center justify-center gap-2 opacity-40">
+            <Smartphone size={40} />
+            <p class="text-sm">Connect a device and enable ADB</p>
+          </div>
+        {/if}
       </div>
     </Resizable.Pane>
 
@@ -173,7 +259,7 @@
         />
       </Button>
       <div class="w-2 h-2 rounded-full bg-green-500"></div>
-      <span class="text-muted-foreground">ADB Active: {androidSerial}</span>
+      <span class="text-muted-foreground">ADB: {androidSerial}</span>
     </div>
   </div>
 </div>
