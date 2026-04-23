@@ -2,9 +2,10 @@
   import { Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, ChevronUp, VideoIcon, Eye, EyeOff } from "@lucide/svelte";
   
   import * as Resizable from "$lib/components/ui/resizable";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Button } from "$lib/components/ui/button";
-  
+
   import { invoke } from "@tauri-apps/api/core";
   import { ModeWatcher, toggleMode } from "mode-watcher";
   import { onMount } from "svelte";
@@ -37,6 +38,14 @@
   $effect(() => {
     localStorage.setItem("lastDesktopPath", desktopPath);
   });
+
+  let pathSegments = $derived(
+    desktopPath.split('/').filter(Boolean).reduce((acc, curr, i, arr) => {
+      const fullPath = '/' + arr.slice(0, i + 1).join('/');
+      acc.push({ name: curr, path: fullPath });
+      return acc;
+    }, [{ name: 'root', path: '/' }] as { name: string, path: string }[])
+  );
 
   async function loadDirectory(path: string) {
     try {
@@ -122,29 +131,55 @@
             <span class="font-semibold text-sm">Local Desktop</span>
           </div>
           <div class="flex items-center gap-2">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                class="h-7 w-7 {showHidden ? 'text-blue-500' : 'text-muted-foreground'}" 
-                onclick={() => showHidden = !showHidden}
-                title={showHidden ? "Hide Hidden Files" : "Show Hidden Files"}
-              >
-                {#if showHidden}
-                  <Eye size={14} />
-                {:else}
-                  <EyeOff size={14} />
-                {/if}
-              </Button>
-             <Button variant="ghost" size="icon" class="h-7 w-7" onclick={() => {
-                const parts = desktopPath.split('/').filter(Boolean);
-                parts.pop();
-                loadDirectory("/" + parts.join('/'));
-             }}>
-                <ChevronUp size={14} />
-             </Button>
-             <span class="text-[10px] font-mono bg-muted px-2 py-1 rounded truncate max-w-[150px]">
-               {desktopPath}
-             </span>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              class="h-7 w-7 {showHidden ? 'text-blue-500' : 'text-muted-foreground'}" 
+              onclick={() => showHidden = !showHidden}
+              title={showHidden ? "Hide Hidden Files" : "Show Hidden Files"}
+            >
+              {#if showHidden}
+                <Eye size={14} />
+              {:else}
+                <EyeOff size={14} />
+              {/if}
+            </Button>
+            <Button variant="ghost" size="icon" class="h-7 w-7" onclick={() => {
+              const parts = desktopPath.split('/').filter(Boolean);
+              parts.pop();
+              loadDirectory("/" + parts.join('/'));
+            }}>
+              <ChevronUp size={14} />
+            </Button>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                {#snippet child({ props })}
+                  <Button 
+                    {...props} 
+                    variant="secondary" 
+                    class="text-[10px] font-mono h-7 px-2 max-w-[150px] truncate"
+                  >
+                    {desktopPath === "/" ? "root" : desktopPath.split('/').pop()}
+                  </Button>
+                {/snippet}
+              </DropdownMenu.Trigger>
+              
+              <DropdownMenu.Content align="end" class="w-48">
+                <DropdownMenu.Group>
+                  <DropdownMenu.Label>Jump to folder</DropdownMenu.Label>
+                  <DropdownMenu.Separator />
+                  {#each pathSegments as segment (segment.path)}
+                    <DropdownMenu.Item 
+                      onclick={() => loadDirectory(segment.path)}
+                      class="flex items-center gap-2 cursor-pointer"
+                    >
+                      <Folder size={14} class="text-blue-400" />
+                      <span class="truncate text-xs">{segment.name}</span>
+                    </DropdownMenu.Item>
+                  {/each}
+                </DropdownMenu.Group>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
           </div>
         </div>
         
