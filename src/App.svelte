@@ -21,10 +21,7 @@
     is_dir: boolean;
   }
 
-  const storedPath = typeof localStorage !== 'undefined' 
-    ? localStorage.getItem("lastDesktopPath") ?? "/" 
-    : "/";
-  let desktopPath = $state(storedPath);
+  let desktopPath = $state(localStorage.getItem("lastDesktopPath") ?? "/");
 
   let showHidden = $state(false);
   let files = $state<FileEntry[]>([]);
@@ -32,11 +29,10 @@
     showHidden ? files : files.filter(f => !f.name.startsWith('.'))
   );
 
-  let androidSerial = $state("Not Connected");
   let selectedSerial = $state<string | null>(null);
   let adbDevices = $state<any[]>([]);
   let adbFiles = $state<AdbFile[]>([]);
-  let adbPath = $state("/sdcard");
+  let adbPath = $state("/storage/emulated/0/");
 
   $effect(() => {
     localStorage.setItem("lastDesktopPath", desktopPath);
@@ -61,11 +57,9 @@
       adbDevices = await invoke("list_adb_devices");
       if (adbDevices.length > 0 && !selectedSerial) {
         selectedSerial = adbDevices[0].serial;
-        androidSerial = selectedSerial;
         loadAdbDirectory(adbPath);
       } else if (adbDevices.length === 0) {
         selectedSerial = null;
-        androidSerial = "Not Connected";
         adbFiles = [];
       }
     } catch (e) {
@@ -76,14 +70,17 @@
   async function loadAdbDirectory(path: string) {
     if (!selectedSerial) return;
     try {
-      const cleanPath = path === "/" ? "/" : path.replace(/\/$/, "");
+      let cleanPath = path.startsWith('/') ? path : '/' + path;
+      if (cleanPath.length > 1 && cleanPath.endsWith('/')) {
+        cleanPath = cleanPath.slice(0, -1);
+      }
       
       const result: AdbFile[] = await invoke("list_adb_directory", { 
         serial: selectedSerial, 
         path: cleanPath 
       });
       
-      adbFiles = result;
+      adbFiles = result.sort((a, b) => Number(b.is_dir) - Number(a.is_dir) || a.name.localeCompare(b.name));
       adbPath = cleanPath;
     } catch (err) {
       console.error("ADB Load Error:", err);
@@ -91,14 +88,8 @@
   }
 
   function joinAdbPath(base: string, name: string) {
-    const prefix = base.endsWith('/') ? base : base + '/';
-    return prefix + name;
-  }
-
-  function goUp() {
-    const parts = desktopPath.split('/').filter(Boolean);
-    parts.pop();
-    loadDirectory("/" + parts.join('/'));
+    const cleanBase = base.endsWith('/') ? base : base + '/';
+    return cleanBase + name;
   }
 
   function getFileIcon(file: FileEntry) {
@@ -108,11 +99,8 @@
     if (['png', 'jpg', 'gif', 'svg'].includes(ext)) return ImageIcon;
     if (['ts', 'js', 'py', 'rs', 'c', 'cpp', 'json'].includes(ext)) return FileCode;
     if (['txt', 'md', 'pdf', 'doc', 'docx', 'ppt', 'xlsx'].includes(ext)) return FileText;
-    if (['mp4', 'wav', 'av1', 'mpeg'].includes(ext)) {
-      return VideoIcon;
-    } else {
-      return File;
-    };
+    if (['mp4', 'wav', 'av1', 'mpeg'].includes(ext)) return VideoIcon;
+    return File;
   }
 
   onMount(() => {
@@ -147,7 +135,11 @@
                   <EyeOff size={14} />
                 {/if}
               </Button>
-             <Button variant="ghost" size="icon" class="h-7 w-7" onclick={goUp}>
+             <Button variant="ghost" size="icon" class="h-7 w-7" onclick={() => {
+                const parts = desktopPath.split('/').filter(Boolean);
+                parts.pop();
+                loadDirectory("/" + parts.join('/'));
+             }}>
                 <ChevronUp size={14} />
              </Button>
              <span class="text-[10px] font-mono bg-muted px-2 py-1 rounded truncate max-w-[150px]">
@@ -197,6 +189,21 @@
             <Button variant="ghost" size="icon" class="h-7 w-7" onclick={refreshDevices}>
               <RefreshCw size={14} />
             </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              class="h-7 w-7" 
+              onclick={() => {
+                if (adbPath === "/" || adbPath === "") return;
+                const parts = adbPath.split('/').filter(Boolean);
+                parts.pop();
+                const newPath = "/" + parts.join('/');
+                loadAdbDirectory(newPath);
+              }} 
+              disabled={!selectedSerial || adbPath === "/"}
+            >
+              <ChevronUp size={14} />
+            </Button>
             <span class="text-[10px] font-mono bg-muted px-2 py-1 rounded truncate max-w-[150px]">
               {adbPath}
             </span>
@@ -206,19 +213,6 @@
         {#if selectedSerial}
           <ScrollArea class="flex-1 h-full w-full">
             <div class="p-4 grid grid-cols-1 gap-1">
-              {#if adbPath !== "/"}
-                <button 
-                  onclick={() => {
-                    const p = adbPath.split('/').filter(Boolean);
-                    p.pop();
-                    loadAdbDirectory("/" + p.join('/'));
-                  }}
-                  class="flex items-center gap-3 p-2 text-sm text-muted-foreground hover:text-foreground"
-                >
-                  <ChevronUp size={16} /> ..
-                </button>
-              {/if}
-
               {#each adbFiles as file (file.name)}
                 <button 
                   onclick={() => file.is_dir && loadAdbDirectory(joinAdbPath(adbPath, file.name))}
@@ -259,7 +253,7 @@
         />
       </Button>
       <div class="w-2 h-2 rounded-full bg-green-500"></div>
-      <span class="text-muted-foreground">ADB: {androidSerial}</span>
+      <span class="text-muted-foreground">ADB: {selectedSerial ?? "Not Connected"}</span>
     </div>
   </div>
 </div>
