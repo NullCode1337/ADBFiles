@@ -35,7 +35,7 @@ pub async fn list_adb_directory(state: tauri::State<'_, AdbState>, serial: Strin
 
     let mut output = Vec::new();
     device.shell_command(
-        &format!("ls -1aF '{}'", path.replace('\'', "'\\''")),
+        &format!("ls -1apF '{}'", path.replace('\'', "'\\''")),
         Some(&mut output),
         None,
     ).map_err(|e| e.to_string())?;
@@ -43,6 +43,7 @@ pub async fn list_adb_directory(state: tauri::State<'_, AdbState>, serial: Strin
     let output_str = String::from_utf8_lossy(&output);
 
     let files: Vec<AdbFileEntry> = output_str.lines()
+    .map(|line| line.trim().replace('\r', ""))
     .filter_map(|line| {
         let line = line.trim();
         if line.is_empty() || line.contains("Permission denied") { return None; }
