@@ -1,5 +1,7 @@
 use adb_client::{ADBDeviceExt, server::ADBServer};
 
+pub struct AdbState(pub std::sync::Mutex<ADBServer>);
+
 #[derive(serde::Serialize)]
 pub struct DeviceObj {
     pub serial: String,
@@ -13,8 +15,8 @@ pub struct AdbFileEntry {
 }
 
 #[tauri::command]
-pub async fn list_adb_devices() -> Result<Vec<DeviceObj>, String> {
-    let mut server = ADBServer::default();
+pub async fn list_adb_devices(state: tauri::State<'_, AdbState>) -> Result<Vec<DeviceObj>, String> {
+    let mut server = state.0.lock().unwrap();
     let devices = server.devices().map_err(|e| e.to_string())?;
 
     let device_list = devices
@@ -29,8 +31,8 @@ pub async fn list_adb_devices() -> Result<Vec<DeviceObj>, String> {
 }
 
 #[tauri::command]
-pub async fn list_adb_directory(serial: String, path: String) -> Result<Vec<AdbFileEntry>, String> {
-    let mut server = ADBServer::default();
+pub async fn list_adb_directory(state: tauri::State<'_, AdbState>, serial: String, path: String) -> Result<Vec<AdbFileEntry>, String> {
+    let mut server = state.0.lock().unwrap();
     let mut device = server.get_device_by_name(&serial).map_err(|e| e.to_string())?;
 
     let mut output_buffer = Vec::new();
