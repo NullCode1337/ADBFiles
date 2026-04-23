@@ -19,15 +19,13 @@ pub async fn list_adb_devices(state: tauri::State<'_, AdbState>) -> Result<Vec<D
     let mut server = state.0.lock().unwrap();
     let devices = server.devices().map_err(|e| e.to_string())?;
 
-    let device_list = devices
+    Ok(devices
         .into_iter()
         .map(|d| DeviceObj {
             serial: d.identifier,
             state: d.state.to_string(),
         })
-        .collect();
-
-    Ok(device_list)
+        .collect())
 }
 
 #[tauri::command]
@@ -35,25 +33,25 @@ pub async fn list_adb_directory(state: tauri::State<'_, AdbState>, serial: Strin
     let mut server = state.0.lock().unwrap();
     let mut device = server.get_device_by_name(&serial).map_err(|e| e.to_string())?;
 
-    let mut output_buffer = Vec::new();
-
+    let mut output = Vec::new();
     device.shell_command(
-        &format!("ls -1LF '{path}'"),
-        Some(&mut output_buffer), 
-        None
+        &format!("ls -1aF '{}'", path.replace('\'', "'\\''")),
+        Some(&mut output),
+        None,
     ).map_err(|e| e.to_string())?;
 
-    let output_str = String::from_utf8(output_buffer).map_err(|e| e.to_string())?;
+    let output_str = String::from_utf8_lossy(&output);
 
-    let files: Vec<AdbFileEntry> = output_str
-        .lines()
-        .filter(|line| !line.contains("Permission denied") && !line.is_empty())
-        .map(|line| {
-            let is_dir = line.ends_with('/');
-            let name = line.trim_end_matches(['/', '*']).to_string();
-            AdbFileEntry { name, is_dir }
+    let files: Vec<AdbFileEntry> = output_str.lines()
+    .filter_map(|line| {
+        let line = line.trim();
+        if line.is_empty() || line.contains("Permission denied") { return None; }
+        Some(AdbFileEntry {
+            is_dir: line.ends_with('/'),
+            name: line.trim_end_matches(['/', '*', '@']).to_string(),
         })
-        .collect();
+    })
+    .collect();
 
     Ok(files)
 }
