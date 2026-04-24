@@ -170,6 +170,8 @@
     type: 'desktop' | 'adb',
     disabled = false
 )}
+    {@const alias_zero = (name: string) => (type === 'adb' && name === '0') ? 'sdcard' : name}
+
     <div class="flex items-center gap-2">
         <Button
             variant="ghost"
@@ -193,7 +195,7 @@
                         variant="secondary"
                         class="h-7 max-w-[150px] truncate px-2 font-mono text-[10px]"
                     >
-                        {currentPath === '/' ? 'root' : currentPath.split('/').pop()}
+                        {currentPath === '/' ? 'root' : alias_zero(currentPath.split('/').pop() || '')}
                     </Button>
                 {/snippet}
             </DropdownMenu.Trigger>
@@ -208,7 +210,7 @@
                             class="flex cursor-pointer items-center gap-2"
                         >
                             <Folder size={14} class={type === 'desktop' ? 'text-blue-400' : 'text-green-400'} />
-                            <span class="truncate text-xs">{segment.name}</span>
+                            <span class="truncate text-xs">{alias_zero(segment.name)}</span>
                         </DropdownMenu.Item>
                     {/each}
                 </DropdownMenu.Group>
