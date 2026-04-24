@@ -8,6 +8,7 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             if cfg!(debug_assertions) {
+                commands::adb::adb_polling(app.handle().clone());
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
                         .level(log::LevelFilter::Info)

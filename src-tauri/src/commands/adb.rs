@@ -1,4 +1,5 @@
 use adb_client::{server::ADBServer, ADBDeviceExt};
+use tauri::{Emitter, Manager};
 
 pub struct AdbState(pub std::sync::Mutex<ADBServer>);
 
@@ -85,4 +86,30 @@ pub async fn launch_scrcpy(serial: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to start scrcpy: {e}"))?;
 
     Ok(())
+}
+
+pub fn adb_polling(app: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            let state = app.state::<AdbState>();
+            
+            let devices_result = {
+                let mut server = state.0.lock().unwrap();
+                server.devices().map(|devices| {
+                    devices.into_iter()
+                        .map(|d| DeviceObj {
+                            serial: d.identifier,
+                            state: d.state.to_string(),
+                        })
+                        .collect::<Vec<DeviceObj>>()
+                })
+            };
+
+            if let Ok(devices) = devices_result {
+                let _ = app.emit("adb_update", &devices);
+            }
+
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+    });
 }

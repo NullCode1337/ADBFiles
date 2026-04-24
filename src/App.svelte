@@ -6,6 +6,7 @@
 	import { Button } from '$lib/components/ui/button';
 
 	import { invoke } from '@tauri-apps/api/core';
+	import { listen } from '@tauri-apps/api/event';
 	import { ModeWatcher, toggleMode } from 'mode-watcher';
 	import { onMount } from 'svelte';
 
@@ -122,8 +123,30 @@
 	}
 
 	onMount(() => {
-		refreshDevices();
+		const unlisten = listen<DeviceObj[]>('adb_update', async (event) => {
+			const newDevices = event.payload;
+			const hasChanged = JSON.stringify(newDevices) !== JSON.stringify(adb.devices);
+			
+			if (hasChanged) {
+				adb.devices = newDevices;
+				
+				if (newDevices.length > 0) {
+					if (!adb.serial || !newDevices.find(d => d.serial === adb.serial)) {
+						adb.serial = newDevices[0].serial;
+						await navigateAdb(adb.path);
+					}
+				} else {
+					adb.serial = null;
+					adb.files = [];
+				}
+			}
+		});
+
 		navigateDesktop(desktop.path);
+
+		return () => {
+			unlisten.then(f => f());
+		};
 	});
 </script>
 
