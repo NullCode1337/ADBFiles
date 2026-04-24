@@ -309,13 +309,14 @@
 					<VideoIcon size={14} /> 
 				</Button>
 			{/if}
-			<Button onclick={toggleMode} variant="outline" size="icon">
+			<Button onclick={toggleMode} variant="outline" size="icon" class="relative h-7 w-7">
 				<SunIcon
-					class="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all! dark:scale-0 dark:-rotate-90"
+					class="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-transform duration-200 dark:-rotate-90 dark:scale-0"
 				/>
 				<MoonIcon
-					class="absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all! dark:scale-100 dark:rotate-0"
+					class="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-transform duration-200 dark:rotate-0 dark:scale-100"
 				/>
+				<span class="sr-only">Toggle theme</span>
 			</Button>
 			<div class="h-2 w-2 rounded-full bg-green-500"></div>
 			<span class="text-muted-foreground">ADB: {selectedSerial ?? 'Not Connected'}</span>
