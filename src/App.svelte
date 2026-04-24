@@ -1,14 +1,15 @@
 <script lang="ts">
-  	import { Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, ChevronUp, VideoIcon, Eye, EyeOff } from "@lucide/svelte";
+  	import { Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, VideoIcon, Eye, EyeOff } from "@lucide/svelte";
 
 	import * as Resizable from '$lib/components/ui/resizable';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Button } from '$lib/components/ui/button';
 
 	import { invoke } from '@tauri-apps/api/core';
 	import { ModeWatcher, toggleMode } from 'mode-watcher';
 	import { onMount } from 'svelte';
+
+	import Navigation from '$lib/components/Navigation.svelte';
 
 	interface File {
 		name: string;
@@ -163,62 +164,6 @@
 	</div>
 {/snippet}
 
-{#snippet path_navigation(
-    currentPath: string, 
-    segments: { name: string, path: string }[], 
-    onNavigate: (path: string) => Promise<void>,
-    type: 'desktop' | 'adb',
-    disabled = false
-)}
-    {@const alias_zero = (name: string) => (type === 'adb' && name === '0') ? 'sdcard' : name}
-
-    <div class="flex items-center gap-2">
-        <Button
-            variant="ghost"
-            size="icon"
-            class="h-7 w-7"
-            disabled={disabled || currentPath === '/'}
-            onclick={() => {
-                const parts = currentPath.split('/').filter(Boolean);
-                parts.pop();
-                onNavigate('/' + parts.join('/'));
-            }}
-        >
-            <ChevronUp size={14} />
-        </Button>
-
-        <DropdownMenu.Root>
-            <DropdownMenu.Trigger {disabled}>
-                {#snippet child({ props })}
-                    <Button
-                        {...props}
-                        variant="secondary"
-                        class="h-7 max-w-[150px] truncate px-2 font-mono text-[10px]"
-                    >
-                        {currentPath === '/' ? 'root' : alias_zero(currentPath.split('/').pop() || '')}
-                    </Button>
-                {/snippet}
-            </DropdownMenu.Trigger>
-
-            <DropdownMenu.Content align="end" class="w-48">
-                <DropdownMenu.Group>
-                    <DropdownMenu.Label>Jump to folder</DropdownMenu.Label>
-                    <DropdownMenu.Separator />
-                    {#each segments as segment (segment.path)}
-                        <DropdownMenu.Item
-                            onclick={() => onNavigate(segment.path)}
-                            class="flex cursor-pointer items-center gap-2"
-                        >
-                            <Folder size={14} class={type === 'desktop' ? 'text-blue-400' : 'text-green-400'} />
-                            <span class="truncate text-xs">{alias_zero(segment.name)}</span>
-                        </DropdownMenu.Item>
-                    {/each}
-                </DropdownMenu.Group>
-            </DropdownMenu.Content>
-        </DropdownMenu.Root>
-    </div>
-{/snippet}
-
 <div class="bg-background flex h-screen w-screen flex-col overflow-hidden">
 	<Resizable.PaneGroup direction="horizontal" class="flex-1">
 		<!-- #region Desktop pane -->
@@ -230,16 +175,21 @@
 						<span class="text-sm font-semibold">Local Desktop</span>
 					</div>
 					<div class="flex items-center gap-2">
-					<Button
-						variant="ghost"
-						size="icon"
-						class="h-7 w-7 {desktop.showHidden ? 'text-blue-500' : 'text-muted-foreground'}"
-						onclick={() => (desktop.showHidden = !desktop.showHidden)}
-					>
-						{#if desktop.showHidden}<Eye size={14} />{:else}<EyeOff size={14} />{/if}
-					</Button>
-					
-					{@render path_navigation(desktop.path, desktopSegments, navigateDesktop, 'desktop')}
+						<Button
+							variant="ghost"
+							size="icon"
+							class="h-7 w-7 {desktop.showHidden ? 'text-blue-500' : 'text-muted-foreground'}"
+							onclick={() => (desktop.showHidden = !desktop.showHidden)}
+						>
+							{#if desktop.showHidden}<Eye size={14} />{:else}<EyeOff size={14} />{/if}
+						</Button>
+						
+						<Navigation 
+							currentPath={desktop.path}
+							segments={desktopSegments}
+							onNavigate={navigateDesktop}
+							type="desktop"
+						/>
 					</div>
 				</div>
 
@@ -266,7 +216,13 @@
 							<RefreshCw size={14} />
 						</Button>
 						
-						{@render path_navigation(adb.path, adbSegments, navigateAdb, 'adb', !adb.serial)}
+						<Navigation 
+							currentPath={adb.path}
+							segments={adbSegments}
+							onNavigate={navigateAdb}
+							type="adb"
+							disabled={!adb.serial}
+						/>
 					</div>
 				</div>
 
