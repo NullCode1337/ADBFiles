@@ -290,7 +290,11 @@
 				/>
 				<span class="sr-only">Toggle theme</span>
 			</Button>
-			<div class="h-2 w-2 rounded-full bg-green-500"></div>
+			{#if adb.serial}
+				<div class="h-2 w-2 rounded-full bg-green-500"></div>
+			{:else}
+				<div class="h-2 w-2 rounded-full bg-red-500"></div>
+			{/if}
 			<span class="text-muted-foreground">ADB: {adb.serial ?? 'Not Connected'}</span>
 		</div>
 	</div>
