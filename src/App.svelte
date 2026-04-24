@@ -34,10 +34,6 @@
 	let adbFiles = $state<AdbFile[]>([]);
 	let adbPath = $state('/storage/emulated/0/');
 
-	$effect(() => {
-		localStorage.setItem('lastDesktopPath', desktopPath);
-	});
-
 	let pathSegments = $derived(
 		desktopPath
 			.split('/')
@@ -51,6 +47,49 @@
 				[{ name: 'root', path: '/' }] as { name: string; path: string }[]
 			)
 	);
+
+	$effect(() => {
+		localStorage.setItem('lastDesktopPath', desktopPath);
+	});
+
+	// #region Functions
+	function getFileIcon(file: FileEntry) {
+		if (file.is_dir) return Folder;
+
+		const ext = file.name.split('.').pop()?.toLowerCase() ?? 'file';
+		if (['png', 'jpg', 'gif', 'svg'].includes(ext)) return ImageIcon;
+		if (['ts', 'js', 'py', 'rs', 'c', 'cpp', 'json'].includes(ext)) return FileCode;
+		if (['txt', 'md', 'pdf', 'doc', 'docx', 'ppt', 'xlsx'].includes(ext)) return FileText;
+		if (['mp4', 'wav', 'av1', 'mpeg'].includes(ext)) return VideoIcon;
+		return File;
+	}
+
+	function joinAdbPath(base: string, name: string) {
+		const cleanBase = base.endsWith('/') ? base : base + '/';
+		return cleanBase + name;
+	}
+
+	async function loadAdbDirectory(path: string) {
+		if (!selectedSerial) return;
+		try {
+			let cleanPath = path.startsWith('/') ? path : '/' + path;
+			if (cleanPath.length > 1 && cleanPath.endsWith('/')) {
+				cleanPath = cleanPath.slice(0, -1);
+			}
+
+			const result: AdbFile[] = await invoke('list_adb_directory', {
+				serial: selectedSerial,
+				path: cleanPath
+			});
+
+			adbFiles = result.sort(
+				(a, b) => Number(b.is_dir) - Number(a.is_dir) || a.name.localeCompare(b.name)
+			);
+			adbPath = cleanPath;
+		} catch (err) {
+			console.error('ADB Load Error:', err);
+		}
+	}
 
 	async function loadDirectory(path: string) {
 		try {
@@ -81,28 +120,6 @@
 		}
 	}
 
-	async function loadAdbDirectory(path: string) {
-		if (!selectedSerial) return;
-		try {
-			let cleanPath = path.startsWith('/') ? path : '/' + path;
-			if (cleanPath.length > 1 && cleanPath.endsWith('/')) {
-				cleanPath = cleanPath.slice(0, -1);
-			}
-
-			const result: AdbFile[] = await invoke('list_adb_directory', {
-				serial: selectedSerial,
-				path: cleanPath
-			});
-
-			adbFiles = result.sort(
-				(a, b) => Number(b.is_dir) - Number(a.is_dir) || a.name.localeCompare(b.name)
-			);
-			adbPath = cleanPath;
-		} catch (err) {
-			console.error('ADB Load Error:', err);
-		}
-	}
-
 	async function startScrcpy() {
         if (!selectedSerial) return;
         
@@ -112,22 +129,7 @@
             console.error('Scrcpy Error:', err);
         }
     }
-
-	function joinAdbPath(base: string, name: string) {
-		const cleanBase = base.endsWith('/') ? base : base + '/';
-		return cleanBase + name;
-	}
-
-	function getFileIcon(file: FileEntry) {
-		if (file.is_dir) return Folder;
-
-		const ext = file.name.split('.').pop()?.toLowerCase() ?? 'file';
-		if (['png', 'jpg', 'gif', 'svg'].includes(ext)) return ImageIcon;
-		if (['ts', 'js', 'py', 'rs', 'c', 'cpp', 'json'].includes(ext)) return FileCode;
-		if (['txt', 'md', 'pdf', 'doc', 'docx', 'ppt', 'xlsx'].includes(ext)) return FileText;
-		if (['mp4', 'wav', 'av1', 'mpeg'].includes(ext)) return VideoIcon;
-		return File;
-	}
+	// #endregion
 
 	onMount(() => {
 		refreshDevices();
@@ -139,6 +141,7 @@
 
 <div class="bg-background flex h-screen w-screen flex-col overflow-hidden">
 	<Resizable.PaneGroup direction="horizontal" class="flex-1">
+		// #region Desktop Pane
 		<Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col">
 			<div class="bg-muted/5 flex h-full min-h-0 flex-col">
 				<div class="bg-background flex h-14 shrink-0 items-center justify-between border-b p-4">
@@ -229,9 +232,11 @@
 				</ScrollArea>
 			</div>
 		</Resizable.Pane>
+		// #endregion
 
 		<Resizable.Handle withHandle />
 
+		// #region ADB Pane
 		<Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col">
 			<div class="bg-muted/5 flex h-full min-h-0 flex-col">
 				<div class="bg-background flex h-14 shrink-0 items-center justify-between border-b p-4">
@@ -292,7 +297,9 @@
 			</div>
 		</Resizable.Pane>
 	</Resizable.PaneGroup>
+	// #endregion
 
+	// #region Footer
 	<div class="bg-muted/30 flex h-10 items-center justify-between border-t px-4 py-2 text-[11px]">
 		<div class="flex gap-4">
 			<span>Files: {visibleFiles.length}</span>
@@ -322,4 +329,5 @@
 			<span class="text-muted-foreground">ADB: {selectedSerial ?? 'Not Connected'}</span>
 		</div>
 	</div>
+	// #endregion
 </div>
