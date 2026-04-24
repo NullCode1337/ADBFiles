@@ -18,9 +18,10 @@ pub fn run() {
         })
         .manage(AdbState(std::sync::Mutex::new(adb_client::server::ADBServer::default())))
         .invoke_handler(tauri::generate_handler![
-            commands::file::list_directory,
+            commands::adb::launch_scrcpy,
             commands::adb::list_adb_devices,
-            commands::adb::list_adb_directory
+            commands::adb::list_adb_directory,
+            commands::file::list_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

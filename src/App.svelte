@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, ChevronUp, VideoIcon, Eye, EyeOff } from "@lucide/svelte";
+  	import { Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, ChevronUp, VideoIcon, Eye, EyeOff } from "@lucide/svelte";
 
 	import * as Resizable from '$lib/components/ui/resizable';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
@@ -29,6 +29,7 @@
 	let visibleFiles = $derived(showHidden ? files : files.filter((f) => !f.name.startsWith('.')));
 
 	let selectedSerial = $state<string | null>(null);
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let adbDevices = $state<any[]>([]);
 	let adbFiles = $state<AdbFile[]>([]);
 	let adbPath = $state('/storage/emulated/0/');
@@ -101,6 +102,16 @@
 			console.error('ADB Load Error:', err);
 		}
 	}
+
+	async function startScrcpy() {
+        if (!selectedSerial) return;
+        
+        try {
+            await invoke('launch_scrcpy', { serial: selectedSerial });
+        } catch (err) {
+            console.error('Scrcpy Error:', err);
+        }
+    }
 
 	function joinAdbPath(base: string, name: string) {
 		const cleanBase = base.endsWith('/') ? base : base + '/';
@@ -287,6 +298,17 @@
 			<span>Files: {visibleFiles.length}</span>
 		</div>
 		<div class="flex items-center gap-2">
+			{#if selectedSerial}
+				<Button 
+					onclick={startScrcpy} 
+					variant="outline" 
+					size="icon" 
+					class="h-7 w-7 border-green-500/50 text-green-600 hover:bg-green-500/10 dark:text-green-400"
+					title="Launch scrcpy"
+				>
+					<VideoIcon size={14} /> 
+				</Button>
+			{/if}
 			<Button onclick={toggleMode} variant="outline" size="icon">
 				<SunIcon
 					class="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all! dark:scale-0 dark:-rotate-90"

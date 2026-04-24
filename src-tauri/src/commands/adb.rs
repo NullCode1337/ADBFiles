@@ -56,3 +56,14 @@ pub async fn list_adb_directory(state: tauri::State<'_, AdbState>, serial: Strin
 
     Ok(files)
 }
+
+#[tauri::command]
+pub async fn launch_scrcpy(serial: String) -> Result<(), String> {
+    let _child = tokio::process::Command::new("scrcpy")
+        .arg("-s")
+        .arg(&serial)
+        .spawn()
+        .map_err(|e| format!("Failed to start scrcpy: {e}"))?;
+    
+    Ok(())
+}
