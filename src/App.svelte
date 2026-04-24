@@ -100,6 +100,21 @@
 		await navigateDesktop(path);
 	}
 
+	function scrollPartitions(event: WheelEvent) {
+		if (partitions.length === 0) return;
+
+		const current = partitions.findIndex(p => p.mount_point === desktop.path);
+
+		let next;
+		if (event.deltaY > 0) {
+			next = (current + 1) % partitions.length;
+		} else {
+			next = (current - 1 + partitions.length) % partitions.length;
+		}
+
+		selectPartition(partitions[next].mount_point);
+	}
+
 	function getFileIcon(file: File) {
 		if (file.is_dir) return Folder;
 		const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
@@ -242,6 +257,7 @@
 						<div class="relative">
 							<button
 								onclick={togglePartitionMenu}
+								onwheel={scrollPartitions}
 								class="hover:bg-accent flex items-center gap-1 rounded-md px-2 py-1 text-sm font-semibold transition-colors {showPartitionMenu ? 'bg-accent' : ''}"
 							>
 								Partitions
