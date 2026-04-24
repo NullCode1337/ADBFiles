@@ -86,6 +86,14 @@
         showHidden ? adb.files : adb.files.filter((f) => !f.name.startsWith('.'))
     );
 
+	const partLabel = $derived(() => {
+		const match = partitions
+			.filter(p => desktop.path.startsWith(p.mount_point))
+			.sort((a, b) => b.mount_point.length - a.mount_point.length)[0];
+		
+		return match ? match.mount_point : 'Partitions';
+	});
+
 	async function fetchPartitions() {
 		partitions = await invoke<Partition[]>('list_partitions');
 	}
@@ -271,7 +279,7 @@
 								onwheel={scrollPartitions}
 								class="hover:bg-accent flex items-center gap-1 rounded-md px-2 py-1 text-sm font-semibold transition-colors {showPartitionMenu ? 'bg-accent' : ''}"
 							>
-								Partitions
+								{partLabel()}
 								<ChevronDown
 									size={14}
 									class="opacity-50 transition-transform {showPartitionMenu ? 'rotate-180' : ''}"
