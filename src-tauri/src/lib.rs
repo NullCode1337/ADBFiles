@@ -16,7 +16,9 @@ pub fn run() {
             }
             Ok(())
         })
-        .manage(AdbState(std::sync::Mutex::new(adb_client::server::ADBServer::default())))
+        .manage(AdbState(std::sync::Mutex::new(
+            adb_client::server::ADBServer::default(),
+        )))
         .invoke_handler(tauri::generate_handler![
             commands::adb::launch_scrcpy,
             commands::adb::list_adb_devices,

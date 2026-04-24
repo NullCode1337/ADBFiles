@@ -19,8 +19,11 @@ pub async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
 
     for entry in entries.flatten() {
         let metadata = entry.metadata();
-        let is_dir = metadata.as_ref().map(std::fs::Metadata::is_dir).unwrap_or(false);
-        
+        let is_dir = metadata
+            .as_ref()
+            .map(std::fs::Metadata::is_dir)
+            .unwrap_or(false);
+
         // Check permission by attempting to read the directory if it's a folder
         let has_permission = if is_dir {
             fs::read_dir(entry.path()).is_ok()

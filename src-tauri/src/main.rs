@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-  adbfiles_lib::run();
+    adbfiles_lib::run();
 }

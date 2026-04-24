@@ -1,4 +1,4 @@
-use adb_client::{ADBDeviceExt, server::ADBServer};
+use adb_client::{server::ADBServer, ADBDeviceExt};
 
 pub struct AdbState(pub std::sync::Mutex<ADBServer>);
 
@@ -11,6 +11,7 @@ pub struct DeviceObj {
 #[derive(serde::Serialize)]
 pub struct AdbFileEntry {
     pub name: String,
+    pub path: String,
     pub is_dir: bool,
 }
 
@@ -29,30 +30,48 @@ pub async fn list_adb_devices(state: tauri::State<'_, AdbState>) -> Result<Vec<D
 }
 
 #[tauri::command]
-pub async fn list_adb_directory(state: tauri::State<'_, AdbState>, serial: String, path: String) -> Result<Vec<AdbFileEntry>, String> {
+pub async fn list_adb_directory(
+    state: tauri::State<'_, AdbState>,
+    serial: String,
+    path: String,
+) -> Result<Vec<AdbFileEntry>, String> {
     let mut server = state.0.lock().unwrap();
-    let mut device = server.get_device_by_name(&serial).map_err(|e| e.to_string())?;
+    let mut device = server
+        .get_device_by_name(&serial)
+        .map_err(|e| e.to_string())?;
 
     let mut output = Vec::new();
-    device.shell_command(
-        &format!("ls -1apF '{}'", path.replace('\'', "'\\''")),
-        Some(&mut output),
-        None,
-    ).map_err(|e| e.to_string())?;
+    device
+        .shell_command(
+            &format!("ls -1apF '{}'", path.replace('\'', "'\\''")),
+            Some(&mut output),
+            None,
+        )
+        .map_err(|e| e.to_string())?;
 
     let output_str = String::from_utf8_lossy(&output);
+    let base_path = if path.ends_with('/') { path.clone() } else { format!("{path}/") };
 
-    let files: Vec<AdbFileEntry> = output_str.lines()
-    .map(|line| line.trim().replace('\r', ""))
-    .filter_map(|line| {
-        let line = line.trim();
-        if line.is_empty() || line.contains("Permission denied") { return None; }
-        Some(AdbFileEntry {
-            is_dir: line.ends_with('/'),
-            name: line.trim_end_matches(['/', '*', '@']).to_string(),
+    let files: Vec<AdbFileEntry> = output_str
+        .lines()
+        .map(|line| line.trim().replace('\r', ""))
+        .filter_map(|line| {
+            let line = line.trim();
+            let name = line.trim_end_matches(['/', '*', '@', '|', '=']).to_string();
+            if line.is_empty()
+                || line.contains("Permission denied")
+                || line == "./"
+                || line == "../"
+            {
+                return None;
+            }
+            Some(AdbFileEntry {
+                is_dir: line.ends_with('/'),
+                name: line.trim_end_matches(['/', '*', '@']).to_string(),
+                path: format!("{base_path}{name}"),
+            })
         })
-    })
-    .collect();
+        .collect();
 
     Ok(files)
 }
@@ -64,6 +83,6 @@ pub async fn launch_scrcpy(serial: String) -> Result<(), String> {
         .arg(&serial)
         .spawn()
         .map_err(|e| format!("Failed to start scrcpy: {e}"))?;
-    
+
     Ok(())
 }
