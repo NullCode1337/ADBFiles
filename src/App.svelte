@@ -42,7 +42,10 @@
 	});
 
 	let showHidden = $state(false);
-	let partitions = $state([] as Partition[]);
+	let partitions = $state([] as Partition[]); 
+	let partitionHistory = $state<Record<string, string>>(
+		JSON.parse(localStorage.getItem('partitionHistory') ?? '{}')
+	);
 	let showPartitionMenu = $state(false);
 
 	function createSegments(path: string, type: 'desktop' | 'adb') {
@@ -74,12 +77,11 @@
 	}
 
 	const desktopSegments = $derived(createSegments(desktop.path, 'desktop'));
-	const adbSegments = $derived(createSegments(adb.path, 'adb'));
-
 	const visibleDesktopFiles = $derived(
         showHidden ? desktop.files : desktop.files.filter((f) => !f.name.startsWith('.'))
     );
 
+	const adbSegments = $derived(createSegments(adb.path, 'adb'));
     const visibleAdbFiles = $derived(
         showHidden ? adb.files : adb.files.filter((f) => !f.name.startsWith('.'))
     );
@@ -103,16 +105,16 @@
 	function scrollPartitions(event: WheelEvent) {
 		if (partitions.length === 0) return;
 
-		const current = partitions.findIndex(p => p.mount_point === desktop.path);
+		const current = partitions
+			.map((p, index) => ({ p, index }))
+			.filter(({ p }) => desktop.path.startsWith(p.mount_point))
+			.sort((a, b) => b.p.mount_point.length - a.p.mount_point.length)[0]?.index ?? 0;
 
-		let next;
-		if (event.deltaY > 0) {
-			next = (current + 1) % partitions.length;
-		} else {
-			next = (current - 1 + partitions.length) % partitions.length;
-		}
+		const direction = event.deltaY > 0 ? 1 : -1;
+		const next = (current + direction + partitions.length) % partitions.length;
+		const path = partitionHistory[partitions[next].mount_point] ?? partitions[next].mount_point;
 
-		selectPartition(partitions[next].mount_point);
+		navigateDesktop(path);
 	}
 
 	function getFileIcon(file: File) {
@@ -137,6 +139,15 @@
 			desktop.files = result;
 			desktop.path = path;
 			localStorage.setItem('lastDesktopPath', path);
+
+			const ownerPartition = partitions
+				.filter(p => path.startsWith(p.mount_point))
+				.sort((a, b) => b.mount_point.length - a.mount_point.length)[0];
+
+			if (ownerPartition) {
+				partitionHistory[ownerPartition.mount_point] = path;
+				localStorage.setItem('partitionHistory', JSON.stringify(partitionHistory));
+			}
 		} catch (err) {
 			console.error(err);
 		}
