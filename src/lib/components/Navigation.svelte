@@ -8,30 +8,26 @@
 	const alias_zero = (name: string) => (type === 'adb' && name === '0' ? 'sdcard' : name);
 
 	function goUp() {
-		const win = currentPath.includes('\\');
-		const sep = win ? '\\' : '/';
+		const win = /^[a-zA-Z]:[\\/]/.test(currentPath);
 
-		let cleanPath = currentPath;
-		if (cleanPath.endsWith(sep) && cleanPath.length > 3) {
-			cleanPath = cleanPath.slice(0, -1);
+		const normalized = currentPath.replace(/\\/g, '/');
+		const parts = normalized.split('/').filter(Boolean);
+
+		if (win) {
+			if (parts.length <= 1) {
+				return;
+			}
+			parts.pop();
+			let newPath = parts.join('\\');
+			if (parts.length === 1 && newPath.endsWith(':')) {
+				newPath += '\\';
+			}
+			onNavigate(newPath);
+		} else {
+			if (parts.length <= 0 || currentPath === '/') return;
+			parts.pop();
+			onNavigate('/' + parts.join('/'));
 		}
-
-		const parts = cleanPath.split(sep).filter(Boolean);
-
-		if (parts.length <= 1) {
-			onNavigate(win ? parts[0] + '\\' : '/');
-			return;
-		}
-
-		parts.pop();
-		let newPath = parts.join(sep);
-		if (win && newPath.endsWith(':')) {
-			newPath += '\\';
-		} else if (!win && newPath === '') {
-			newPath = '/';
-		}
-
-		onNavigate(newPath);
 	}
 
 	const displayLabel = $derived(() => {
