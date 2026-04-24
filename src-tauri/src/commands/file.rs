@@ -61,10 +61,14 @@ pub async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
 #[tauri::command]
 pub async fn list_partitions() -> Vec<Partition> {
     let disks = Disks::new_with_refreshed_list();
-    disks.iter().map(|disk| {
-        Partition {
+    disks
+        .iter()
+        .filter(|disk| {
+            fs::read_dir(disk.mount_point()).is_ok()
+        })
+        .map(|disk| Partition {
             name: disk.name().to_string_lossy().to_string(),
             mount_point: disk.mount_point().to_string_lossy().to_string(),
         }
-    }).collect()
+    ).collect()
 }
