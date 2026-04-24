@@ -12,34 +12,41 @@ pub struct FileEntry {
 
 #[tauri::command]
 pub async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
-    let target_path = Path::new(&path);
+    let target_path = if path.is_empty() {
+        Path::new("/")
+    } else {
+        Path::new(&path)
+    };
+
     let entries = fs::read_dir(target_path).map_err(|e| e.to_string())?;
 
     let mut file_list = Vec::new();
 
     for entry in entries.flatten() {
-        let metadata = entry.metadata();
-        let is_dir = metadata
-            .as_ref()
-            .map(std::fs::Metadata::is_dir)
-            .unwrap_or(false);
+        let path_buf = entry.path();
+        let metadata = entry.metadata().ok();
 
-        // Check permission by attempting to read the directory if it's a folder
+        let is_dir = metadata.as_ref().is_some_and(std::fs::Metadata::is_dir);
+
         let has_permission = if is_dir {
-            fs::read_dir(entry.path()).is_ok()
+            fs::read_dir(&path_buf).is_ok()
         } else {
-            true
+            fs::File::open(&path_buf).is_ok()
         };
 
         file_list.push(FileEntry {
             name: entry.file_name().to_string_lossy().into_owned(),
-            path: entry.path().to_string_lossy().into_owned(),
+            path: path_buf.to_string_lossy().into_owned(),
             is_dir,
             has_permission,
         });
     }
 
-    // Sort: Folders first, then alphabetical
-    file_list.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
+    file_list.sort_by(|a, b| {
+        b.is_dir
+            .cmp(&a.is_dir)
+            .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+
     Ok(file_list)
 }

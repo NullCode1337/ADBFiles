@@ -37,22 +37,36 @@
 		devices: [] as DeviceObj[]
 	});
 
-	function createSegments(path: string) {
-		return path
-			.split('/')
-			.filter(Boolean)
-			.reduce(
-				(acc, curr, i, arr) => {
-					const fullPath = '/' + arr.slice(0, i + 1).join('/');
-					acc.push({ name: curr, path: fullPath });
-					return acc;
-				},
-				[{ name: 'root', path: '/' }]
-			);
+	function createSegments(path: string, type: 'desktop' | 'adb') {
+		const normalized = path.replace(/\\/g, '/');
+		const parts = normalized.split('/').filter(Boolean);
+
+		const win = path.includes(':\\') || path.match(/^[a-zA-Z]:/);
+		const rootName = win && parts.length > 0 ? parts[0] : 'root';
+		const rootPath = win && parts.length > 0 ? parts[0] + '\\' : '/';
+
+		const segments = parts
+			.map((curr, i) => {
+				if (win && i === 0) return null;
+				const subParts = parts.slice(0, i + 1);
+				let fullPath;
+
+				if (type === 'desktop' && win) {
+					fullPath = subParts.join('\\');
+					if (fullPath.length === 2 && fullPath.endsWith(':')) fullPath += '\\';
+				} else {
+					fullPath = '/' + subParts.join('/');
+				}
+
+				return { name: curr, path: fullPath };
+			})
+			.filter(Boolean) as { name: string; path: string }[];
+
+		return [{ name: rootName, path: rootPath }, ...segments];
 	}
 
-	const desktopSegments = $derived(createSegments(desktop.path));
-	const adbSegments = $derived(createSegments(adb.path));
+	const desktopSegments = $derived(createSegments(desktop.path, 'desktop'));
+	const adbSegments = $derived(createSegments(adb.path, 'adb'));
 
 	const visibleDesktopFiles = $derived(
 		desktop.showHidden ? desktop.files : desktop.files.filter((f) => !f.name.startsWith('.'))
@@ -126,12 +140,12 @@
 		const unlisten = listen<DeviceObj[]>('adb_update', async (event) => {
 			const newDevices = event.payload;
 			const hasChanged = JSON.stringify(newDevices) !== JSON.stringify(adb.devices);
-			
+
 			if (hasChanged) {
 				adb.devices = newDevices;
-				
+
 				if (newDevices.length > 0) {
-					if (!adb.serial || !newDevices.find(d => d.serial === adb.serial)) {
+					if (!adb.serial || !newDevices.find((d) => d.serial === adb.serial)) {
 						adb.serial = newDevices[0].serial;
 						await navigateAdb(adb.path);
 					}
@@ -145,7 +159,7 @@
 		navigateDesktop(desktop.path);
 
 		return () => {
-			unlisten.then(f => f());
+			unlisten.then((f) => f());
 		};
 	});
 </script>
@@ -153,9 +167,9 @@
 <ModeWatcher />
 
 {#snippet file_list(
-    files: File[], 
-    onNavigate: (path: string) => Promise<void>, 
-    type: 'desktop' | 'adb'
+	files: File[],
+	onNavigate: (path: string) => Promise<void>,
+	type: 'desktop' | 'adb'
 )}
 	<div class="grid grid-cols-1 gap-1 p-4">
 		{#each files as file (file.path)}
@@ -206,8 +220,8 @@
 						>
 							{#if desktop.showHidden}<Eye size={14} />{:else}<EyeOff size={14} />{/if}
 						</Button>
-						
-						<Navigation 
+
+						<Navigation
 							currentPath={desktop.path}
 							segments={desktopSegments}
 							onNavigate={navigateDesktop}
@@ -238,8 +252,8 @@
 						<Button variant="ghost" size="icon" class="h-7 w-7" onclick={refreshDevices}>
 							<RefreshCw size={14} />
 						</Button>
-						
-						<Navigation 
+
+						<Navigation
 							currentPath={adb.path}
 							segments={adbSegments}
 							onNavigate={navigateAdb}
