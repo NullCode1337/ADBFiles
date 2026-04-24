@@ -14,6 +14,7 @@ pub struct AdbFileEntry {
     pub name: String,
     pub path: String,
     pub is_dir: bool,
+    pub is_hidden: bool,
 }
 
 #[tauri::command]
@@ -68,7 +69,8 @@ pub async fn list_adb_directory(
             }
             Some(AdbFileEntry {
                 is_dir: line.ends_with('/'),
-                name: line.trim_end_matches(['/', '*', '@']).to_string(),
+                is_hidden: name.starts_with('.'),
+                name: name.clone(),
                 path: format!("{base_path}{name}"),
             })
         })
@@ -109,7 +111,7 @@ pub fn adb_polling(app: tauri::AppHandle) {
                 let _ = app.emit("adb_update", &devices);
             }
 
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
         }
     });
 }

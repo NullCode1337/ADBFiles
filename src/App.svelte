@@ -31,8 +31,7 @@
 
 	let desktop = $state({
 		path: localStorage.getItem('lastDesktopPath') ?? '/',
-		files: [] as File[],
-		showHidden: false
+		files: [] as File[]
 	});
 
 	let adb = $state({
@@ -42,6 +41,7 @@
 		devices: [] as DeviceObj[]
 	});
 
+	let showHidden = $state(false);
 	let partitions = $state([] as Partition[]);
 	let showPartitionMenu = $state(false);
 
@@ -77,8 +77,12 @@
 	const adbSegments = $derived(createSegments(adb.path, 'adb'));
 
 	const visibleDesktopFiles = $derived(
-		desktop.showHidden ? desktop.files : desktop.files.filter((f) => !f.name.startsWith('.'))
-	);
+        showHidden ? desktop.files : desktop.files.filter((f) => !f.name.startsWith('.'))
+    );
+
+    const visibleAdbFiles = $derived(
+        showHidden ? adb.files : adb.files.filter((f) => !f.name.startsWith('.'))
+    );
 
 	async function fetchPartitions() {
 		partitions = await invoke<Partition[]>('list_partitions');
@@ -287,15 +291,6 @@
 						</div>
 					</div>
 					<div class="flex items-center gap-2">
-						<Button
-							variant="ghost"
-							size="icon"
-							class="h-7 w-7 {desktop.showHidden ? 'text-blue-500' : 'text-muted-foreground'}"
-							onclick={() => (desktop.showHidden = !desktop.showHidden)}
-						>
-							{#if desktop.showHidden}<Eye size={14} />{:else}<EyeOff size={14} />{/if}
-						</Button>
-
 						<Navigation
 							currentPath={desktop.path}
 							segments={desktopSegments}
@@ -340,7 +335,7 @@
 
 				{#if adb.serial}
 					<ScrollArea class="h-full w-full flex-1">
-						{@render file_list(adb.files, navigateAdb, 'adb')}
+						{@render file_list(visibleAdbFiles, navigateAdb, 'adb')}
 					</ScrollArea>
 				{:else}
 					<div class="flex flex-1 flex-col items-center justify-center gap-2 opacity-40">
@@ -355,8 +350,16 @@
 
 	<!-- #region Footer -->
 	<div class="bg-muted/30 flex h-10 items-center justify-between border-t px-4 py-2 text-[11px]">
-		<div class="flex gap-4">
+		<div class="flex gap-4 items-center">
 			<span>Files: {visibleDesktopFiles.length}</span>
+			<Button
+				variant="outline"
+				size="icon"
+				class="h-7 w-7 {showHidden ? 'text-blue-500' : 'text-muted-foreground'}"
+				onclick={() => (showHidden = !showHidden)}
+			>
+				{#if showHidden}<Eye size={14} />{:else}<EyeOff size={14} />{/if}
+			</Button>
 		</div>
 		<div class="flex items-center gap-2">
 			{#if adb.serial}
