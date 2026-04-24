@@ -1,5 +1,5 @@
 <script lang="ts">
-  	import { Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, VideoIcon, Eye, EyeOff } from "@lucide/svelte";
+  	import { Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, VideoIcon, Eye, EyeOff, ChevronDown } from "@lucide/svelte";
 
 	import * as Resizable from '$lib/components/ui/resizable';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
@@ -24,6 +24,11 @@
 		state: string;
 	}
 
+	interface Partition {
+		name: string;
+		mount_point: string;
+	}
+
 	let desktop = $state({
 		path: localStorage.getItem('lastDesktopPath') ?? '/',
 		files: [] as File[],
@@ -36,6 +41,8 @@
 		serial: null as string | null,
 		devices: [] as DeviceObj[]
 	});
+
+	let partitions = $state([] as Partition[]);
 
 	function createSegments(path: string, type: 'desktop' | 'adb') {
 		const normalized = path.replace(/\\/g, '/');
@@ -71,6 +78,10 @@
 	const visibleDesktopFiles = $derived(
 		desktop.showHidden ? desktop.files : desktop.files.filter((f) => !f.name.startsWith('.'))
 	);
+
+	async function fetchPartitions() {
+    	partitions = await invoke<Partition[]>('list_partitions');
+	}
 
 	function getFileIcon(file: File) {
 		if (file.is_dir) return Folder;
@@ -137,6 +148,7 @@
 	}
 
 	onMount(() => {
+		fetchPartitions();
 		const unlisten = listen<DeviceObj[]>('adb_update', async (event) => {
 			const newDevices = event.payload;
 			const hasChanged = JSON.stringify(newDevices) !== JSON.stringify(adb.devices);
@@ -209,7 +221,36 @@
 				<div class="bg-background flex h-14 shrink-0 items-center justify-between border-b p-4">
 					<div class="flex items-center gap-2">
 						<Monitor size={18} class="text-blue-500" />
-						<span class="text-sm font-semibold">Local Desktop</span>
+						
+						<div class="relative group">
+							<button 
+								onclick={fetchPartitions}
+								class="flex items-center gap-1 text-sm font-semibold hover:bg-accent px-2 py-1 rounded-md transition-colors"
+							>
+								Partitions
+								<ChevronDown size={14} class="opacity-50" />
+							</button>
+
+							<div class="absolute left-0 top-full z-50 mt-1 hidden w-48 rounded-md border bg-popover p-1 shadow-md group-hover:block">
+								{#each partitions as part (part.mount_point)}
+									<button
+										class="w-full text-left px-2 py-1.5 text-xs hover:bg-accent rounded-sm flex flex-col"
+										onclick={() => navigateDesktop(part.mount_point)}
+									>
+										<span class="font-medium">{part.name || 'Local Disk'}</span>
+										<span class="text-[10px] text-muted-foreground">{part.mount_point}</span>
+									</button>
+								{/each}
+								{#if partitions.length === 0}
+									<button 
+										class="w-full text-left px-2 py-1.5 text-xs italic opacity-50"
+										onclick={() => navigateDesktop('/')}
+									>
+										Root (/)
+									</button>
+								{/if}
+							</div>
+						</div>
 					</div>
 					<div class="flex items-center gap-2">
 						<Button

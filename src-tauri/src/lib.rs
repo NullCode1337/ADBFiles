@@ -24,7 +24,8 @@ pub fn run() {
             commands::adb::launch_scrcpy,
             commands::adb::list_adb_devices,
             commands::adb::list_adb_directory,
-            commands::file::list_directory
+            commands::file::list_directory,
+            commands::file::list_partitions
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
