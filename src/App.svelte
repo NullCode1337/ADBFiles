@@ -50,6 +50,8 @@
 	}
 
 	const desktopSegments = $derived(createSegments(desktop.path));
+	const adbSegments = $derived(createSegments(adb.path));
+
 	const visibleDesktopFiles = $derived(
 		desktop.showHidden ? desktop.files : desktop.files.filter((f) => !f.name.startsWith('.'))
 	);
@@ -161,6 +163,60 @@
 	</div>
 {/snippet}
 
+{#snippet path_navigation(
+    currentPath: string, 
+    segments: { name: string, path: string }[], 
+    onNavigate: (path: string) => Promise<void>,
+    type: 'desktop' | 'adb',
+    disabled = false
+)}
+    <div class="flex items-center gap-2">
+        <Button
+            variant="ghost"
+            size="icon"
+            class="h-7 w-7"
+            disabled={disabled || currentPath === '/'}
+            onclick={() => {
+                const parts = currentPath.split('/').filter(Boolean);
+                parts.pop();
+                onNavigate('/' + parts.join('/'));
+            }}
+        >
+            <ChevronUp size={14} />
+        </Button>
+
+        <DropdownMenu.Root>
+            <DropdownMenu.Trigger {disabled}>
+                {#snippet child({ props })}
+                    <Button
+                        {...props}
+                        variant="secondary"
+                        class="h-7 max-w-[150px] truncate px-2 font-mono text-[10px]"
+                    >
+                        {currentPath === '/' ? 'root' : currentPath.split('/').pop()}
+                    </Button>
+                {/snippet}
+            </DropdownMenu.Trigger>
+
+            <DropdownMenu.Content align="end" class="w-48">
+                <DropdownMenu.Group>
+                    <DropdownMenu.Label>Jump to folder</DropdownMenu.Label>
+                    <DropdownMenu.Separator />
+                    {#each segments as segment (segment.path)}
+                        <DropdownMenu.Item
+                            onclick={() => onNavigate(segment.path)}
+                            class="flex cursor-pointer items-center gap-2"
+                        >
+                            <Folder size={14} class={type === 'desktop' ? 'text-blue-400' : 'text-green-400'} />
+                            <span class="truncate text-xs">{segment.name}</span>
+                        </DropdownMenu.Item>
+                    {/each}
+                </DropdownMenu.Group>
+            </DropdownMenu.Content>
+        </DropdownMenu.Root>
+    </div>
+{/snippet}
+
 <div class="bg-background flex h-screen w-screen flex-col overflow-hidden">
 	<Resizable.PaneGroup direction="horizontal" class="flex-1">
 		<!-- #region Desktop pane -->
@@ -172,59 +228,16 @@
 						<span class="text-sm font-semibold">Local Desktop</span>
 					</div>
 					<div class="flex items-center gap-2">
-						<Button
-							variant="ghost"
-							size="icon"
-							class="h-7 w-7 {desktop.showHidden ? 'text-blue-500' : 'text-muted-foreground'}"
-							onclick={() => (desktop.showHidden = !desktop.showHidden)}
-							title={desktop.showHidden ? 'Hide Hidden Files' : 'Show Hidden Files'}
-						>
-							{#if desktop.showHidden}
-								<Eye size={14} />
-							{:else}
-								<EyeOff size={14} />
-							{/if}
-						</Button>
-						<Button
-							variant="ghost"
-							size="icon"
-							onclick={() => {
-								const parts = desktop.path.split('/').filter(Boolean);
-								parts.pop();
-								navigateDesktop('/' + parts.join('/'));
-							}}
-						>
-							<ChevronUp size={14} />
-						</Button>
-						<DropdownMenu.Root>
-							<DropdownMenu.Trigger>
-								{#snippet child({ props })}
-									<Button
-										{...props}
-										variant="secondary"
-										class="h-7 max-w-[150px] truncate px-2 font-mono text-[10px]"
-									>
-										{desktop.path === '/' ? 'root' : desktop.path.split('/').pop()}
-									</Button>
-								{/snippet}
-							</DropdownMenu.Trigger>
-
-							<DropdownMenu.Content align="end" class="w-48">
-								<DropdownMenu.Group>
-									<DropdownMenu.Label>Jump to folder</DropdownMenu.Label>
-									<DropdownMenu.Separator />
-									{#each desktopSegments as segment (segment.path)}
-										<DropdownMenu.Item
-											onclick={() => navigateDesktop(segment.path)}
-											class="flex cursor-pointer items-center gap-2"
-										>
-											<Folder size={14} class="text-blue-400" />
-											<span class="truncate text-xs">{segment.name}</span>
-										</DropdownMenu.Item>
-									{/each}
-								</DropdownMenu.Group>
-							</DropdownMenu.Content>
-						</DropdownMenu.Root>
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-7 w-7 {desktop.showHidden ? 'text-blue-500' : 'text-muted-foreground'}"
+						onclick={() => (desktop.showHidden = !desktop.showHidden)}
+					>
+						{#if desktop.showHidden}<Eye size={14} />{:else}<EyeOff size={14} />{/if}
+					</Button>
+					
+					{@render path_navigation(desktop.path, desktopSegments, navigateDesktop, 'desktop')}
 					</div>
 				</div>
 
@@ -250,20 +263,8 @@
 						<Button variant="ghost" size="icon" class="h-7 w-7" onclick={refreshDevices}>
 							<RefreshCw size={14} />
 						</Button>
-						<Button
-							variant="ghost"
-							onclick={() => {
-								const parts = adb.path.split('/').filter(Boolean);
-								parts.pop();
-								navigateAdb('/' + parts.join('/'));
-							}}
-							disabled={!adb.serial || adb.path === '/'}
-						>
-							<ChevronUp size={14} />
-						</Button>
-						<span class="bg-muted max-w-[150px] truncate rounded px-2 py-1 font-mono text-[10px]">
-							{adb.path}
-						</span>
+						
+						{@render path_navigation(adb.path, adbSegments, navigateAdb, 'adb', !adb.serial)}
 					</div>
 				</div>
 
