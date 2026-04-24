@@ -43,6 +43,7 @@
 	});
 
 	let partitions = $state([] as Partition[]);
+	let showPartitionMenu = $state(false);
 
 	function createSegments(path: string, type: 'desktop' | 'adb') {
 		const normalized = path.replace(/\\/g, '/');
@@ -80,7 +81,19 @@
 	);
 
 	async function fetchPartitions() {
-    	partitions = await invoke<Partition[]>('list_partitions');
+		partitions = await invoke<Partition[]>('list_partitions');
+	}
+
+	async function togglePartitionMenu() {
+		if (!showPartitionMenu) {
+			await fetchPartitions();
+		}
+		showPartitionMenu = !showPartitionMenu;
+	}
+
+	async function selectPartition(path: string) {
+		showPartitionMenu = false;
+		await navigateDesktop(path);
 	}
 
 	function getFileIcon(file: File) {
@@ -221,35 +234,56 @@
 				<div class="bg-background flex h-14 shrink-0 items-center justify-between border-b p-4">
 					<div class="flex items-center gap-2">
 						<Monitor size={18} class="text-blue-500" />
-						
-						<div class="relative group">
-							<button 
-								onclick={fetchPartitions}
-								class="flex items-center gap-1 text-sm font-semibold hover:bg-accent px-2 py-1 rounded-md transition-colors"
+
+						<div class="relative">
+							<button
+								onclick={togglePartitionMenu}
+								class="hover:bg-accent flex items-center gap-1 rounded-md px-2 py-1 text-sm font-semibold transition-colors {showPartitionMenu ? 'bg-accent' : ''}"
 							>
 								Partitions
-								<ChevronDown size={14} class="opacity-50" />
+								<ChevronDown
+									size={14}
+									class="opacity-50 transition-transform {showPartitionMenu ? 'rotate-180' : ''}"
+								/>
 							</button>
 
-							<div class="absolute left-0 top-full z-50 mt-1 hidden w-48 rounded-md border bg-popover p-1 shadow-md group-hover:block">
-								{#each partitions as part (part.mount_point)}
-									<button
-										class="w-full text-left px-2 py-1.5 text-xs hover:bg-accent rounded-sm flex flex-col"
-										onclick={() => navigateDesktop(part.mount_point)}
-									>
-										<span class="font-medium">{part.name || 'Local Disk'}</span>
-										<span class="text-[10px] text-muted-foreground">{part.mount_point}</span>
-									</button>
-								{/each}
-								{#if partitions.length === 0}
-									<button 
-										class="w-full text-left px-2 py-1.5 text-xs italic opacity-50"
-										onclick={() => navigateDesktop('/')}
-									>
-										Root (/)
-									</button>
-								{/if}
-							</div>
+							{#if showPartitionMenu}
+								<!-- svelte-ignore a11y_click_events_have_key_events -->
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
+								<div class="fixed inset-0 z-40" onclick={() => (showPartitionMenu = false)}></div>
+
+								<div
+									class="bg-popover absolute top-full left-0 z-50 mt-1 w-56 rounded-md border p-1 shadow-lg"
+								>
+									<div class="text-muted-foreground px-2 py-1.5 text-[10px] font-bold uppercase">
+										Available Drives
+									</div>
+
+									<div class="max-h-[300px] overflow-y-auto">
+										{#each partitions as part (part.mount_point)}
+											<button
+												class="hover:bg-accent flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm transition-colors"
+												onclick={() => selectPartition(part.mount_point)}
+											>
+												<Folder size={14} class="text-blue-400" />
+												<div class="flex flex-col leading-tight">
+													<span class="truncate">{part.name || 'Local Disk'}</span>
+													<span class="text-muted-foreground text-[10px]">{part.mount_point}</span>
+												</div>
+											</button>
+										{/each}
+
+										{#if partitions.length === 0}
+											<button
+												class="w-full px-2 py-2 text-left text-sm italic opacity-50"
+												onclick={() => selectPartition('/')}
+											>
+												Root (/)
+											</button>
+										{/if}
+									</div>
+								</div>
+							{/if}
 						</div>
 					</div>
 					<div class="flex items-center gap-2">
