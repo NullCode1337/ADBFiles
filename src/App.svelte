@@ -2,7 +2,6 @@
   	import { Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, VideoIcon, Eye, EyeOff, ChevronDown, Trash2 } from "@lucide/svelte";
 
 	import * as Resizable from '$lib/components/ui/resizable';
-	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Button } from '$lib/components/ui/button';
 
 	import { invoke } from '@tauri-apps/api/core';
@@ -11,6 +10,7 @@
 	import { onMount } from 'svelte';
 
 	import Navigation from '$lib/components/Navigation.svelte';
+	import VirtualList from '$lib/components/VirtualList.svelte';
 
 	interface File {
 		name: string;
@@ -42,7 +42,7 @@
 	});
 
 	let showHidden = $state(false);
-	let partitions = $state([] as Partition[]); 
+	let partitions = $state([] as Partition[]);
 	let partitionHistory = $state<Record<string, string>>(
 		JSON.parse(localStorage.getItem('partitionHistory') ?? '{}')
 	);
@@ -256,14 +256,14 @@
 	onNavigate: (path: string) => Promise<void>,
 	type: 'desktop' | 'adb'
 )}
-	<div class="grid grid-cols-1 gap-1 p-4">
-		{#each files as file (file.path)}
+	<VirtualList items={files} itemHeight={38}>
+		{#snippet children(file)}
 			{@const Icon = getFileIcon(file)}
-			<div class="group flex items-center gap-1">
+			<div class="group flex h-full items-center gap-1 px-4">
 				<button
 					onclick={() => file.is_dir && (file.has_permission ?? true) && onNavigate(file.path)}
 					disabled={file.has_permission === false}
-					class="flex flex-1 items-center justify-between rounded-md p-2 text-sm transition-colors
+					class="flex flex-1 items-center justify-between rounded-md p-1.5 text-sm transition-colors
                     {(file.has_permission ?? true)
 						? 'hover:bg-accent cursor-pointer'
 						: 'cursor-not-allowed opacity-40'}"
@@ -288,7 +288,7 @@
 					<Button
 						variant="ghost"
 						size="icon"
-						class="hover:text-destructive h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
+						class="hover:text-destructive h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
 						onclick={(e) => {
 							e.stopPropagation();
 							deleteFile(file, type);
@@ -298,8 +298,8 @@
 					</Button>
 				{/if}
 			</div>
-		{/each}
-	</div>
+		{/snippet}
+	</VirtualList>
 {/snippet}
 
 <div class="bg-background flex h-screen w-screen flex-col overflow-hidden">
@@ -373,9 +373,9 @@
 					</div>
 				</div>
 
-				<ScrollArea class="h-full w-full flex-1">
+				<div class="h-full w-full flex-1 overflow-hidden">
 					{@render file_list(visibleDesktopFiles, navigateDesktop, 'desktop')}
-				</ScrollArea>
+				</div>
 			</div>
 		</Resizable.Pane>
 		<!-- #endregion -->
@@ -407,9 +407,9 @@
 				</div>
 
 				{#if adb.serial}
-					<ScrollArea class="h-full w-full flex-1">
+					<div class="h-full w-full flex-1 overflow-hidden">
 						{@render file_list(visibleAdbFiles, navigateAdb, 'adb')}
-					</ScrollArea>
+					</div>
 				{:else}
 					<div class="flex flex-1 flex-col items-center justify-center gap-2 opacity-40">
 						<Smartphone size={40} />
