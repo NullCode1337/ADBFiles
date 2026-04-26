@@ -18,6 +18,16 @@ pub struct Partition {
 }
 
 #[tauri::command]
+pub async fn delete_desktop_file(path: String) -> Result<(), String> {
+    let target = std::path::Path::new(&path);
+    if target.is_dir() {
+        std::fs::remove_dir_all(target).map_err(|e| e.to_string())
+    } else {
+        std::fs::remove_file(target).map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
 pub async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
     let target_path = if path.is_empty() {
         Path::new("/")

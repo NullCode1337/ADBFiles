@@ -18,6 +18,24 @@ pub struct AdbFileEntry {
 }
 
 #[tauri::command]
+pub async fn delete_adb_file(
+    state: tauri::State<'_, AdbState>,
+    serial: String,
+    path: String,
+) -> Result<(), String> {
+    let mut server = state.0.lock().unwrap();
+    let mut device = server.get_device_by_name(&serial).map_err(|e| e.to_string())?;
+    
+    device.shell_command(
+        &format!("rm -rf '{}'", path.replace('\'', "'\\''")),
+        None,
+        None,
+    ).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn list_adb_devices(state: tauri::State<'_, AdbState>) -> Result<Vec<DeviceObj>, String> {
     let mut server = state.0.lock().unwrap();
     let devices = server.devices().map_err(|e| e.to_string())?;

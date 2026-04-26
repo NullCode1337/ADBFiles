@@ -1,5 +1,5 @@
 <script lang="ts">
-  	import { Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, VideoIcon, Eye, EyeOff, ChevronDown } from "@lucide/svelte";
+  	import { Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, VideoIcon, Eye, EyeOff, ChevronDown, Trash2 } from "@lucide/svelte";
 
 	import * as Resizable from '$lib/components/ui/resizable';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
@@ -78,19 +78,19 @@
 
 	const desktopSegments = $derived(createSegments(desktop.path, 'desktop'));
 	const visibleDesktopFiles = $derived(
-        showHidden ? desktop.files : desktop.files.filter((f) => !f.name.startsWith('.'))
-    );
+		showHidden ? desktop.files : desktop.files.filter((f) => !f.name.startsWith('.'))
+	);
 
 	const adbSegments = $derived(createSegments(adb.path, 'adb'));
-    const visibleAdbFiles = $derived(
-        showHidden ? adb.files : adb.files.filter((f) => !f.name.startsWith('.'))
-    );
+	const visibleAdbFiles = $derived(
+		showHidden ? adb.files : adb.files.filter((f) => !f.name.startsWith('.'))
+	);
 
 	const partLabel = $derived(() => {
 		const match = partitions
-			.filter(p => desktop.path.startsWith(p.mount_point))
+			.filter((p) => desktop.path.startsWith(p.mount_point))
 			.sort((a, b) => b.mount_point.length - a.mount_point.length)[0];
-		
+
 		return match ? match.mount_point : 'Partitions';
 	});
 
@@ -113,10 +113,11 @@
 	function scrollPartitions(event: WheelEvent) {
 		if (partitions.length === 0) return;
 
-		const current = partitions
-			.map((p, index) => ({ p, index }))
-			.filter(({ p }) => desktop.path.startsWith(p.mount_point))
-			.sort((a, b) => b.p.mount_point.length - a.p.mount_point.length)[0]?.index ?? 0;
+		const current =
+			partitions
+				.map((p, index) => ({ p, index }))
+				.filter(({ p }) => desktop.path.startsWith(p.mount_point))
+				.sort((a, b) => b.p.mount_point.length - a.p.mount_point.length)[0]?.index ?? 0;
 
 		const direction = event.deltaY > 0 ? 1 : -1;
 		const next = (current + direction + partitions.length) % partitions.length;
@@ -149,7 +150,7 @@
 			localStorage.setItem('lastDesktopPath', path);
 
 			const ownerPartition = partitions
-				.filter(p => path.startsWith(p.mount_point))
+				.filter((p) => path.startsWith(p.mount_point))
 				.sort((a, b) => b.mount_point.length - a.mount_point.length)[0];
 
 			if (ownerPartition) {
@@ -198,6 +199,27 @@
 		}
 	}
 
+	async function deleteFile(file: File, type: 'desktop' | 'adb') {
+		const confirmed = confirm(`Are you sure you want to delete ${file.name}?`);
+		if (!confirmed) return;
+
+		try {
+			if (type === 'desktop') {
+				await invoke('delete_desktop_file', { path: file.path });
+				await navigateDesktop(desktop.path);
+			} else {
+				if (!adb.serial) return;
+				await invoke('delete_adb_file', {
+					serial: adb.serial,
+					path: file.path
+				});
+				await navigateAdb(adb.path);
+			}
+		} catch (err) {
+			alert(`Delete failed: ${err}`);
+		}
+	}
+
 	onMount(() => {
 		fetchPartitions();
 		const unlisten = listen<DeviceObj[]>('adb_update', async (event) => {
@@ -237,29 +259,45 @@
 	<div class="grid grid-cols-1 gap-1 p-4">
 		{#each files as file (file.path)}
 			{@const Icon = getFileIcon(file)}
-			<button
-				onclick={() => file.is_dir && (file.has_permission ?? true) && onNavigate(file.path)}
-				disabled={file.has_permission === false}
-				class="flex items-center justify-between rounded-md p-2 text-sm transition-colors
-                {(file.has_permission ?? true)
-					? 'hover:bg-accent cursor-pointer'
-					: 'cursor-not-allowed opacity-40'}"
-			>
-				<div class="flex items-center gap-3">
-					<Icon
-						size={16}
-						class={file.is_dir
-							? type === 'desktop'
-								? 'text-blue-400'
-								: 'text-green-400'
-							: 'text-zinc-400'}
-					/>
-					<span class="truncate">{file.name}</span>
-				</div>
-				{#if file.has_permission === false}
-					<Lock size={12} class="text-muted-foreground" />
+			<div class="group flex items-center gap-1">
+				<button
+					onclick={() => file.is_dir && (file.has_permission ?? true) && onNavigate(file.path)}
+					disabled={file.has_permission === false}
+					class="flex flex-1 items-center justify-between rounded-md p-2 text-sm transition-colors
+                    {(file.has_permission ?? true)
+						? 'hover:bg-accent cursor-pointer'
+						: 'cursor-not-allowed opacity-40'}"
+				>
+					<div class="flex items-center gap-3">
+						<Icon
+							size={16}
+							class={file.is_dir
+								? type === 'desktop'
+									? 'text-blue-400'
+									: 'text-green-400'
+								: 'text-zinc-400'}
+						/>
+						<span class="truncate">{file.name}</span>
+					</div>
+					{#if file.has_permission === false}
+						<Lock size={12} class="text-muted-foreground" />
+					{/if}
+				</button>
+
+				{#if file.has_permission !== false}
+					<Button
+						variant="ghost"
+						size="icon"
+						class="hover:text-destructive h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
+						onclick={(e) => {
+							e.stopPropagation();
+							deleteFile(file, type);
+						}}
+					>
+						<Trash2 size={14} />
+					</Button>
 				{/if}
-			</button>
+			</div>
 		{/each}
 	</div>
 {/snippet}
@@ -385,7 +423,7 @@
 
 	<!-- #region Footer -->
 	<div class="bg-muted/30 flex h-10 items-center justify-between border-t px-4 py-2 text-[11px]">
-		<div class="flex gap-4 items-center">
+		<div class="flex items-center gap-4">
 			<span>Files: {visibleDesktopFiles.length}</span>
 			<Button
 				variant="outline"
