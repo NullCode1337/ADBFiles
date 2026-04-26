@@ -1,7 +1,8 @@
-use adb_client::{server::ADBServer, ADBDeviceExt};
+use adb_client::{ADBDeviceExt, server::ADBServer};
+use std::sync::Arc;
 use tauri::{Emitter, Manager};
 
-pub struct AdbState(pub std::sync::Mutex<ADBServer>);
+pub struct AdbState(pub Arc<std::sync::Mutex<ADBServer>>);
 
 #[derive(serde::Serialize)]
 pub struct DeviceObj {
@@ -23,16 +24,23 @@ pub async fn delete_adb_file(
     serial: String,
     path: String,
 ) -> Result<(), String> {
-    let mut server = state.0.lock().unwrap();
-    let mut device = server.get_device_by_name(&serial).map_err(|e| e.to_string())?;
-    
-    device.shell_command(
-        &format!("rm -rf '{}'", path.replace('\'', "'\\''")),
-        None,
-        None,
-    ).map_err(|e| e.to_string())?;
+    let lock = Arc::clone(&state.0);
 
-    Ok(())
+    tokio::task::spawn_blocking(move || {
+        let mut server = lock.lock().map_err(|_| "Poisoned lock")?;
+        let mut device = server
+            .get_device_by_name(&serial)
+            .map_err(|e| e.to_string())?;
+
+        let escpath = path.replace('\'', "'\\''");
+        device
+            .shell_command(&format!("rm -rf '{escpath}'"), None, None)
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -55,46 +63,60 @@ pub async fn list_adb_directory(
     serial: String,
     path: String,
 ) -> Result<Vec<AdbFileEntry>, String> {
-    let mut server = state.0.lock().unwrap();
-    let mut device = server
-        .get_device_by_name(&serial)
-        .map_err(|e| e.to_string())?;
+    let lock = Arc::clone(&state.0);
 
-    let mut output = Vec::new();
-    device
-        .shell_command(
-            &format!("ls -1apF '{}'", path.replace('\'', "'\\''")),
-            Some(&mut output),
-            None,
-        )
-        .map_err(|e| e.to_string())?;
+    tokio::task::spawn_blocking(move || {
+        let mut server = lock.lock().map_err(|_| "Poisoned lock")?;
+        let mut device = server
+            .get_device_by_name(&serial)
+            .map_err(|e| e.to_string())?;
 
-    let output_str = String::from_utf8_lossy(&output);
-    let base_path = if path.ends_with('/') { path.clone() } else { format!("{path}/") };
+        let mut output = Vec::new();
+        let escpath = path.replace('\'', "'\\''");
 
-    let files: Vec<AdbFileEntry> = output_str
-        .lines()
-        .map(|line| line.trim().replace('\r', ""))
-        .filter_map(|line| {
-            let line = line.trim();
-            let name = line.trim_end_matches(['/', '*', '@', '|', '=']).to_string();
-            if line.is_empty()
-                || line.contains("Permission denied")
-                || line == "./"
-                || line == "../"
-            {
-                return None;
-            }
-            Some(AdbFileEntry {
-                is_dir: line.ends_with('/'),
-                is_hidden: name.starts_with('.'),
-                name: name.clone(),
-                path: format!("{base_path}{name}"),
+        device
+            .shell_command(
+                &format!("ls -1apF '{escpath}'"),
+                Some(&mut output),
+                None,
+            )
+            .map_err(|e| e.to_string())?;
+
+        let output_str = String::from_utf8_lossy(&output);
+        let base_path = if path.ends_with('/') {
+            path
+        } else {
+            format!("{path}/")
+        };
+
+        let files = output_str
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim().replace('\r', "");
+                if line.is_empty()
+                    || line.contains("Permission denied")
+                    || line == "./"
+                    || line == "../"
+                {
+                    return None;
+                }
+
+                let is_dir = line.ends_with('/');
+                let name = line.trim_end_matches(['/', '*', '@', '|', '=']).to_string();
+
+                Some(AdbFileEntry {
+                    is_hidden: name.starts_with('.'),
+                    path: format!("{base_path}{name}"),
+                    name,
+                    is_dir,
+                })
             })
-        })
-        .collect();
+            .collect();
 
-    Ok(files)
+        Ok(files)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -109,23 +131,28 @@ pub async fn launch_scrcpy(serial: String) -> Result<(), String> {
 }
 
 pub fn adb_polling(app: tauri::AppHandle) {
+    let state = app.state::<AdbState>();
+    let server_lock = Arc::clone(&state.0);
+
     tauri::async_runtime::spawn(async move {
         loop {
-            let state = app.state::<AdbState>();
-            
-            let devices_result = {
-                let mut server = state.0.lock().unwrap();
-                server.devices().map(|devices| {
-                    devices.into_iter()
+            let lock = Arc::clone(&server_lock);
+
+            let devices_result = tokio::task::spawn_blocking(move || {
+                let mut server = lock.lock().ok()?;
+                server.devices().ok().map(|devices| {
+                    devices
+                        .into_iter()
                         .map(|d| DeviceObj {
                             serial: d.identifier,
                             state: d.state.to_string(),
                         })
-                        .collect::<Vec<DeviceObj>>()
+                        .collect::<Vec<_>>()
                 })
-            };
+            })
+            .await;
 
-            if let Ok(devices) = devices_result {
+            if let Ok(Some(devices)) = devices_result {
                 let _ = app.emit("adb_update", &devices);
             }
 

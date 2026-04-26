@@ -1,5 +1,3 @@
-use crate::commands::adb::AdbState;
-
 mod commands;
 
 #[allow(clippy::missing_panics_doc)]
@@ -17,9 +15,12 @@ pub fn run() {
             }
             Ok(())
         })
-        .manage(AdbState(std::sync::Mutex::new(
-            adb_client::server::ADBServer::default(),
-        )))
+        .manage(crate::commands::adb::AdbState(
+            std::sync::Arc::new(
+                std::sync::Mutex::new(
+                    adb_client::server::ADBServer::default(),
+                )
+            )))
         .invoke_handler(tauri::generate_handler![
             commands::adb::launch_scrcpy,
             commands::adb::delete_adb_file,

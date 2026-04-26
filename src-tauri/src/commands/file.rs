@@ -19,53 +19,61 @@ pub struct Partition {
 
 #[tauri::command]
 pub async fn delete_desktop_file(path: String) -> Result<(), String> {
-    let target = std::path::Path::new(&path);
-    if target.is_dir() {
-        std::fs::remove_dir_all(target).map_err(|e| e.to_string())
-    } else {
-        std::fs::remove_file(target).map_err(|e| e.to_string())
-    }
+    tokio::task::spawn_blocking(move || {
+        let target = Path::new(&path);
+        if target.is_dir() {
+            fs::remove_dir_all(target)
+        } else {
+            fs::remove_file(target)
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string()) // Handle fs error
 }
 
 #[tauri::command]
 pub async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
-    let target_path = if path.is_empty() {
-        Path::new("/")
-    } else {
-        Path::new(&path)
-    };
-
-    let entries = fs::read_dir(target_path).map_err(|e| e.to_string())?;
-
-    let mut file_list = Vec::new();
-
-    for entry in entries.flatten() {
-        let path_buf = entry.path();
-        let metadata = entry.metadata().ok();
-
-        let is_dir = metadata.as_ref().is_some_and(std::fs::Metadata::is_dir);
-
-        let has_permission = if is_dir {
-            fs::read_dir(&path_buf).is_ok()
+    tokio::task::spawn_blocking(move || {
+        let target_path = if path.is_empty() {
+            Path::new("/")
         } else {
-            fs::File::open(&path_buf).is_ok()
+            Path::new(&path)
         };
 
-        file_list.push(FileEntry {
-            name: entry.file_name().to_string_lossy().into_owned(),
-            path: path_buf.to_string_lossy().into_owned(),
-            is_dir,
-            has_permission,
+        let entries = fs::read_dir(target_path).map_err(|e| e.to_string())?;
+
+        let mut file_list: Vec<FileEntry> = entries
+            .flatten()
+            .map(|entry| {
+                let path_buf = entry.path();
+                let metadata = entry.metadata().ok();
+                let is_dir = metadata.as_ref().is_some_and(std::fs::Metadata::is_dir);
+                let has_permission = if is_dir {
+                    fs::read_dir(&path_buf).is_ok()
+                } else {
+                    metadata.is_some()
+                };
+
+                FileEntry {
+                    name: entry.file_name().to_string_lossy().into_owned(),
+                    path: path_buf.to_string_lossy().into_owned(),
+                    is_dir,
+                    has_permission,
+                }
+            })
+            .collect();
+
+        file_list.sort_by(|a, b| {
+            b.is_dir
+                .cmp(&a.is_dir)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
         });
-    }
 
-    file_list.sort_by(|a, b| {
-        b.is_dir
-            .cmp(&a.is_dir)
-            .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
-
-    Ok(file_list)
+        Ok(file_list)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -73,12 +81,10 @@ pub async fn list_partitions() -> Vec<Partition> {
     let disks = Disks::new_with_refreshed_list();
     disks
         .iter()
-        .filter(|disk| {
-            fs::read_dir(disk.mount_point()).is_ok()
-        })
+        .filter(|disk| fs::read_dir(disk.mount_point()).is_ok())
         .map(|disk| Partition {
             name: disk.name().to_string_lossy().to_string(),
             mount_point: disk.mount_point().to_string_lossy().to_string(),
-        }
-    ).collect()
+        })
+        .collect()
 }
