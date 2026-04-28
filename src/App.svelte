@@ -277,9 +277,9 @@
 				const index = adb.devices.findIndex((d) => d.serial === incoming.serial);
 
 				if (index !== -1) {
-					adb.devices[index] = { 
-						...adb.devices[index], 
-						state: incoming.state 
+					adb.devices[index] = {
+						...adb.devices[index],
+						state: incoming.state
 					};
 				} else {
 					adb.devices.push(incoming);
@@ -307,30 +307,30 @@
 				<button
 					onclick={() => file.is_dir && (file.has_permission ?? true) && onNavigate(file.path)}
 					disabled={file.has_permission === false}
-					class="flex flex-1 items-center justify-between rounded-md p-1.5 text-sm transition-colors
+					class="flex min-w-0 flex-1 items-center rounded-md p-1.5 text-sm transition-colors
                     {(file.has_permission ?? true)
 						? 'hover:bg-accent cursor-pointer'
 						: 'cursor-not-allowed opacity-40'}"
 				>
-					<div class="flex items-center gap-3">
+					<div class="flex min-w-0 flex-1 items-center gap-3">
 						<Icon
 							size={16}
-							class={file.is_dir
+							class="shrink-0 {file.is_dir
 								? type === 'desktop'
 									? 'text-blue-400'
 									: 'text-green-400'
-								: 'text-zinc-400'}
+								: 'text-zinc-400'}"
 						/>
-						<span class="truncate">{file.name}</span>
+						<span class="block truncate text-left">{file.name}</span>
 					</div>
 					{#if file.has_permission === false}
-						<Lock size={12} class="text-muted-foreground" />
+						<Lock size={12} class="text-muted-foreground ml-2 shrink-0" />
 					{/if}
 				</button>
 
 				{#if file.has_permission !== false}
 					<div
-						class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+						class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
 					>
 						{#if adb.serial}
 							<Button
