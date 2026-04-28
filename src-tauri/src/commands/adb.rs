@@ -19,12 +19,30 @@ pub struct AdbFileEntry {
     pub is_hidden: bool,
 }
 
+struct AdbPath;
+
+impl AdbPath {
+    fn join(base: &str, name: &str) -> String {
+        let base = base.trim_end_matches('/');
+        format!("{base}/{name}")
+    }
+
+    fn escape(path: &str) -> String {
+        path.replace('\'', "'\\''")
+    }
+
+    fn trail(path: &str) -> String {
+        if path.ends_with('/') { path.to_string() } else { format!("{path}/") }
+    }
+}
+
 pub fn adb_polling(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         loop {
             let app = app.clone();
             let _ = spawn_blocking(move || {                
                 let _ = ADBServer::default().track_devices(|device| {
+                    println!("{device:#?}");
                     let device_obj = DeviceObj {
                         serial: device.identifier,
                         state: device.state.to_string(),
@@ -55,9 +73,8 @@ pub async fn delete_adb_file(
             .get_device_by_name(&serial)
             .map_err(|e| e.to_string())?;
 
-        let escpath = path.replace('\'', "'\\''");
         device
-            .shell_command(&format!("rm -rf '{escpath}'"), None, None)
+            .shell_command(&format!("rm -rf '{}'", AdbPath::escape(&path)), None, None)
             .map_err(|e| e.to_string())?;
 
         Ok(())
@@ -106,22 +123,17 @@ pub async fn list_adb_directory(
             .map_err(|e| e.to_string())?;
 
         let mut output = Vec::new();
-        let escpath = path.replace('\'', "'\\''");
 
         device
             .shell_command(
-                &format!("ls -1apF '{escpath}'"),
+                &format!("ls -1apF '{}'", AdbPath::escape(&path)),
                 Some(&mut output),
                 None,
             )
             .map_err(|e| e.to_string())?;
 
         let output_str = String::from_utf8_lossy(&output);
-        let base_path = if path.ends_with('/') {
-            path
-        } else {
-            format!("{path}/")
-        };
+        let base_path = AdbPath::trail(&path);
 
         let files = output_str
             .lines()
@@ -140,7 +152,7 @@ pub async fn list_adb_directory(
 
                 Some(AdbFileEntry {
                     is_hidden: name.starts_with('.'),
-                    path: format!("{base_path}{name}"),
+                    path: AdbPath::join(&base_path, &name),
                     name,
                     is_dir,
                 })
@@ -174,7 +186,7 @@ pub async fn adb_push(
             let mut device = server.get_device_by_name(&serial).map_err(|e| e.to_string())?;
 
             let file_name = std::path::Path::new(&src).file_name().ok_or("Invalid path")?.to_string_lossy();
-            let dest_path = format!("{}/{}", dest.trim_end_matches('/'), file_name);
+            let dest_path = AdbPath::join(&dest, &file_name);
 
             let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
             let mut reader = std::io::BufReader::new(file);
@@ -204,7 +216,7 @@ pub async fn adb_pull(
             let mut server = lock.lock().map_err(|_| "Poisoned lock")?;
             let mut device = server.get_device_by_name(&serial).map_err(|e| e.to_string())?;
 
-            let file_name = src.split('/').next_back().ok_or("Invalid path")?;
+            let file_name = src.trim_end_matches('/').split('/').next_back().ok_or("Invalid path")?;
             let dest_path = std::path::Path::new(&dest).join(file_name);
 
             let file = std::fs::File::create(&dest_path).map_err(|e| e.to_string())?;
