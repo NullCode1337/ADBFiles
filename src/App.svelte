@@ -11,7 +11,8 @@
 
 	import Navigation from '$lib/components/Navigation.svelte';
 	import VirtualList from '$lib/components/VirtualList.svelte';
-
+	import FileDropper from "$lib/components/FileDropper.svelte";
+	
 	interface File {
 		name: string;
 		path: string;
@@ -263,6 +264,27 @@
 		}
 	});
 
+	async function dropOpen(path: string, isDir: boolean) {
+        if (isDir) {
+            await navigateDesktop(path);
+        }
+    }
+
+    async function dropPush(path: string, name: string, isDir: boolean) {
+        if (!adb.serial) return;
+        try {
+            await invoke('adb_push', {
+                serial: adb.serial,
+                src: path,
+                dest: adb.path,
+                isDir: isDir
+            });
+            await navigateAdb(adb.path);
+        } catch (err) {
+            alert(`Transfer failed: ${err}`);
+        }
+    }
+
 	onMount(() => {
 		fetchPartitions();
 		navigateDesktop(desktop.path);
@@ -294,6 +316,13 @@
 </script>
 
 <ModeWatcher />
+
+<FileDropper 
+    adbPath={adb.path} 
+    adbSerial={adb.serial} 
+    onOpen={dropOpen}
+    onPush={dropPush}
+/>
 
 {#snippet file_list(
 	files: File[],
