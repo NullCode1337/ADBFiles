@@ -22,13 +22,15 @@ pub fn run() {
                 )
             )))
         .invoke_handler(tauri::generate_handler![
-            commands::adb::launch_scrcpy,
+            commands::adb::adb_pull,
+            commands::adb::adb_push,
             commands::adb::delete_adb_file,
+            commands::adb::launch_scrcpy,
             commands::adb::list_adb_devices,
             commands::adb::list_adb_directory,
             commands::file::delete_desktop_file,
             commands::file::list_directory,
-            commands::file::list_partitions
+            commands::file::list_partitions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

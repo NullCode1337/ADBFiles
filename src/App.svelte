@@ -1,5 +1,5 @@
 <script lang="ts">
-  	import { Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, VideoIcon, Eye, EyeOff, ChevronDown, Trash2 } from "@lucide/svelte";
+  	import { ArrowRight, ArrowLeft, Monitor, Smartphone, RefreshCw, Folder, File, FileText, ImageIcon, FileCode, Lock, SunIcon, MoonIcon, VideoIcon, Eye, EyeOff, ChevronDown, Trash2 } from "@lucide/svelte";
 
 	import * as Resizable from '$lib/components/ui/resizable';
 	import { Button } from '$lib/components/ui/button';
@@ -220,6 +220,33 @@
 		}
 	}
 
+	async function transferFiles(file: File, type: 'desktop' | 'adb') {
+		if (!adb.serial) return;
+
+		try {
+			if (type === 'desktop') {
+				await invoke('adb_push', {
+					serial: adb.serial,
+					src: file.path,
+					dest: adb.path,
+					isDir: file.is_dir
+				});
+				await navigateAdb(adb.path);
+			} else {
+				await invoke('adb_pull', {
+					serial: adb.serial,
+					src: file.path,
+					dest: desktop.path,
+					isDir: file.is_dir
+				});
+				await navigateDesktop(desktop.path);
+			}
+		} catch (err) {
+			console.log(err);
+			alert(`Transfer failed: ${err}`);
+		}
+	}
+
 	onMount(() => {
 		fetchPartitions();
 		const unlisten = listen<DeviceObj[]>('adb_update', async (event) => {
@@ -257,7 +284,7 @@
 	type: 'desktop' | 'adb'
 )}
 	<VirtualList items={files} itemHeight={38}>
-		{#snippet children(file)}
+		{#snippet children(file: File)}
 			{@const Icon = getFileIcon(file)}
 			<div class="group flex h-full items-center gap-1 px-4">
 				<button
@@ -279,23 +306,43 @@
 						/>
 						<span class="truncate">{file.name}</span>
 					</div>
-					{#if file.has_permission === false}
-						<Lock size={12} class="text-muted-foreground" />
-					{/if}
 				</button>
 
 				{#if file.has_permission !== false}
-					<Button
-						variant="ghost"
-						size="icon"
-						class="hover:text-destructive h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
-						onclick={(e) => {
-							e.stopPropagation();
-							deleteFile(file, type);
-						}}
+					<div
+						class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
 					>
-						<Trash2 size={14} />
-					</Button>
+						{#if adb.serial}
+							<Button
+								variant="ghost"
+								size="icon"
+								class="h-7 w-7 hover:bg-blue-500/10 cursor-pointer {type === 'adb' ? 'text-green-500' : 'text-blue-500'}"
+								onclick={(e) => {
+									e.stopPropagation();
+									transferFiles(file, type);
+								}}
+								title={type === 'desktop' ? 'Push to Device' : 'Pull from Device'}
+							>
+								{#if type === 'desktop'}
+								<ArrowRight size={14} />
+								{:else}
+								<ArrowLeft size={14} />
+								{/if}
+							</Button>
+						{/if}
+
+						<Button
+							variant="ghost"
+							size="icon"
+							class="text-destructive hover:text-white h-7 w-7 cursor-pointer"
+							onclick={(e) => {
+								e.stopPropagation();
+								deleteFile(file, type);
+							}}
+						>
+							<Trash2 size={14} />
+						</Button>
+					</div>
 				{/if}
 			</div>
 		{/snippet}

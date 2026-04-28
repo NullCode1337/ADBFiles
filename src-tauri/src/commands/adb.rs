@@ -1,6 +1,7 @@
 use adb_client::{ADBDeviceExt, server::ADBServer};
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
+use tokio::task::spawn_blocking;
 
 pub struct AdbState(pub Arc<std::sync::Mutex<ADBServer>>);
 
@@ -18,6 +19,37 @@ pub struct AdbFileEntry {
     pub is_hidden: bool,
 }
 
+pub fn adb_polling(app: tauri::AppHandle) {
+    let state = app.state::<AdbState>();
+    let server_lock = Arc::clone(&state.0);
+
+    tauri::async_runtime::spawn(async move {
+        loop {
+            let lock = Arc::clone(&server_lock);
+
+            let devices_result = spawn_blocking(move || {
+                let mut server = lock.lock().ok()?;
+                server.devices().ok().map(|devices| {
+                    devices
+                        .into_iter()
+                        .map(|d| DeviceObj {
+                            serial: d.identifier,
+                            state: d.state.to_string(),
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .await;
+
+            if let Ok(Some(devices)) = devices_result {
+                let _ = app.emit("adb_update", &devices);
+            }
+
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        }
+    });
+}
+
 #[tauri::command]
 pub async fn delete_adb_file(
     state: tauri::State<'_, AdbState>,
@@ -26,7 +58,7 @@ pub async fn delete_adb_file(
 ) -> Result<(), String> {
     let lock = Arc::clone(&state.0);
 
-    tokio::task::spawn_blocking(move || {
+    spawn_blocking(move || {
         let mut server = lock.lock().map_err(|_| "Poisoned lock")?;
         let mut device = server
             .get_device_by_name(&serial)
@@ -41,6 +73,17 @@ pub async fn delete_adb_file(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn launch_scrcpy(serial: String) -> Result<(), String> {
+    let _child = tokio::process::Command::new("scrcpy")
+        .arg("-s")
+        .arg(&serial)
+        .spawn()
+        .map_err(|e| format!("Failed to start scrcpy: {e}"))?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -65,7 +108,7 @@ pub async fn list_adb_directory(
 ) -> Result<Vec<AdbFileEntry>, String> {
     let lock = Arc::clone(&state.0);
 
-    tokio::task::spawn_blocking(move || {
+    spawn_blocking(move || {
         let mut server = lock.lock().map_err(|_| "Poisoned lock")?;
         let mut device = server
             .get_device_by_name(&serial)
@@ -120,43 +163,63 @@ pub async fn list_adb_directory(
 }
 
 #[tauri::command]
-pub async fn launch_scrcpy(serial: String) -> Result<(), String> {
-    let _child = tokio::process::Command::new("scrcpy")
-        .arg("-s")
-        .arg(&serial)
-        .spawn()
-        .map_err(|e| format!("Failed to start scrcpy: {e}"))?;
+pub async fn adb_push(
+    state: tauri::State<'_, AdbState>,
+    serial: String,
+    src: String,
+    dest: String,
+    is_dir: bool,
+) -> Result<(), String> {
+    if is_dir {
+        std::process::Command::new("adb")
+            .args(["-s", &serial, "push", &src, &dest])
+            .output()
+            .map_err(|e| format!("Folder push failed: {e}"))?;
+        Ok(())
+    } else {
+        let lock = Arc::clone(&state.0);
+        spawn_blocking(move || {
+            let mut server = lock.lock().map_err(|_| "Poisoned lock")?;
+            let mut device = server.get_device_by_name(&serial).map_err(|e| e.to_string())?;
 
-    Ok(())
+            let file_name = std::path::Path::new(&src).file_name().ok_or("Invalid path")?.to_string_lossy();
+            let dest_path = format!("{}/{}", dest.trim_end_matches('/'), file_name);
+
+            let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
+            let mut reader = std::io::BufReader::new(file);
+            device.push(&mut reader, &dest_path).map_err(|e| e.to_string())?;
+            Ok(())
+        }).await.map_err(|e| e.to_string())?
+    }
 }
 
-pub fn adb_polling(app: tauri::AppHandle) {
-    let state = app.state::<AdbState>();
-    let server_lock = Arc::clone(&state.0);
+#[tauri::command]
+pub async fn adb_pull(
+    state: tauri::State<'_, AdbState>,
+    serial: String,
+    src: String,
+    dest: String,
+    is_dir: bool,
+) -> Result<(), String> {
+    if is_dir {
+        std::process::Command::new("adb")
+            .args(["-s", &serial, "pull", &src, &dest])
+            .output()
+            .map_err(|e| format!("Folder pull failed: {e}"))?;
+        Ok(())
+    } else {
+        let lock = Arc::clone(&state.0);
+        spawn_blocking(move || {
+            let mut server = lock.lock().map_err(|_| "Poisoned lock")?;
+            let mut device = server.get_device_by_name(&serial).map_err(|e| e.to_string())?;
 
-    tauri::async_runtime::spawn(async move {
-        loop {
-            let lock = Arc::clone(&server_lock);
+            let file_name = src.split('/').next_back().ok_or("Invalid path")?;
+            let dest_path = std::path::Path::new(&dest).join(file_name);
 
-            let devices_result = tokio::task::spawn_blocking(move || {
-                let mut server = lock.lock().ok()?;
-                server.devices().ok().map(|devices| {
-                    devices
-                        .into_iter()
-                        .map(|d| DeviceObj {
-                            serial: d.identifier,
-                            state: d.state.to_string(),
-                        })
-                        .collect::<Vec<_>>()
-                })
-            })
-            .await;
-
-            if let Ok(Some(devices)) = devices_result {
-                let _ = app.emit("adb_update", &devices);
-            }
-
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-        }
-    });
+            let file = std::fs::File::create(&dest_path).map_err(|e| e.to_string())?;
+            let mut writer = std::io::BufWriter::new(file);
+            device.pull(&src, &mut writer).map_err(|e| e.to_string())?;
+            Ok(())
+        }).await.map_err(|e| e.to_string())?
+    }
 }
