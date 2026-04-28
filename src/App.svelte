@@ -41,6 +41,8 @@
 		devices: [] as DeviceObj[]
 	});
 
+	const activeDevice = $derived(adb.devices.find((d) => d.state === 'device'));
+
 	let showHidden = $state(false);
 	let partitions = $state([] as Partition[]);
 	let partitionHistory = $state<Record<string, string>>(
@@ -247,6 +249,20 @@
 		}
 	}
 
+	$effect(() => {
+		if (activeDevice) {
+			if (adb.serial !== activeDevice.serial || adb.files.length === 0) {
+				adb.serial = activeDevice.serial;
+				navigateAdb(adb.path);
+			}
+		} else {
+			if (adb.serial !== null) {
+				adb.serial = null;
+				adb.files = [];
+			}
+		}
+	});
+
 	onMount(() => {
 		fetchPartitions();
 		navigateDesktop(desktop.path);
@@ -254,30 +270,21 @@
 		// Refresh ADB once before polling as no update when device pre-connected
 		refreshDevices();
 		// ADB Polling (rust backend sends event)
-		const unlisten = listen<DeviceObj | DeviceObj[]>('adb_update', async (event) => {
+		const unlisten = listen<DeviceObj | DeviceObj[]>('adb_update', (event) => {
 			const payload = Array.isArray(event.payload) ? event.payload : [event.payload];
 
 			payload.forEach((incoming) => {
 				const index = adb.devices.findIndex((d) => d.serial === incoming.serial);
 
 				if (index !== -1) {
-					adb.devices[index].state = incoming.state;
+					adb.devices[index] = { 
+						...adb.devices[index], 
+						state: incoming.state 
+					};
 				} else {
-					adb.devices = [...adb.devices, incoming];
+					adb.devices.push(incoming);
 				}
 			});
-
-			const connected = adb.devices.find((d) => d.state === 'Device');
-
-			if (connected) {
-				if (!adb.serial || adb.serial !== connected.serial) {
-					adb.serial = connected.serial;
-					await navigateAdb(adb.path);
-				}
-			} else {
-				adb.serial = null;
-				adb.files = [];
-			}
 		});
 
 		return () => {
