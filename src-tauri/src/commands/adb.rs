@@ -1,11 +1,11 @@
 use adb_client::{ADBDeviceExt, server::ADBServer};
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
 use tokio::task::spawn_blocking;
 
 pub struct AdbState(pub Arc<std::sync::Mutex<ADBServer>>);
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone)]
 pub struct DeviceObj {
     pub serial: String,
     pub state: String,
@@ -20,31 +20,22 @@ pub struct AdbFileEntry {
 }
 
 pub fn adb_polling(app: tauri::AppHandle) {
-    let state = app.state::<AdbState>();
-    let server_lock = Arc::clone(&state.0);
-
     tauri::async_runtime::spawn(async move {
         loop {
-            let lock = Arc::clone(&server_lock);
+            let app = app.clone();
+            let _ = spawn_blocking(move || {                
+                let _ = ADBServer::default().track_devices(|device| {
+                    let device_obj = DeviceObj {
+                        serial: device.identifier,
+                        state: device.state.to_string(),
+                    };
 
-            let devices_result = spawn_blocking(move || {
-                let mut server = lock.lock().ok()?;
-                server.devices().ok().map(|devices| {
-                    devices
-                        .into_iter()
-                        .map(|d| DeviceObj {
-                            serial: d.identifier,
-                            state: d.state.to_string(),
-                        })
-                        .collect::<Vec<_>>()
-                })
-            })
-            .await;
+                    let _ = app.emit("adb_update", vec![device_obj]); 
+                    Ok(())
+                });
+            }).await;
 
-            if let Ok(Some(devices)) = devices_result {
-                let _ = app.emit("adb_update", &devices);
-            }
-
+            // Wait a bit before re-loop if tracker exits
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
         }
     });

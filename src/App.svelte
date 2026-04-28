@@ -249,26 +249,36 @@
 
 	onMount(() => {
 		fetchPartitions();
-		const unlisten = listen<DeviceObj[]>('adb_update', async (event) => {
-			const newDevices = event.payload;
-			const hasChanged = JSON.stringify(newDevices) !== JSON.stringify(adb.devices);
+		navigateDesktop(desktop.path);
 
-			if (hasChanged) {
-				adb.devices = newDevices;
+		// Refresh ADB once before polling as no update when device pre-connected
+		refreshDevices();
+		// ADB Polling (rust backend sends event)
+		const unlisten = listen<DeviceObj | DeviceObj[]>('adb_update', async (event) => {
+			const payload = Array.isArray(event.payload) ? event.payload : [event.payload];
 
-				if (newDevices.length > 0) {
-					if (!adb.serial || !newDevices.find((d) => d.serial === adb.serial)) {
-						adb.serial = newDevices[0].serial;
-						await navigateAdb(adb.path);
-					}
+			payload.forEach((incoming) => {
+				const index = adb.devices.findIndex((d) => d.serial === incoming.serial);
+
+				if (index !== -1) {
+					adb.devices[index].state = incoming.state;
 				} else {
-					adb.serial = null;
-					adb.files = [];
+					adb.devices = [...adb.devices, incoming];
 				}
+			});
+
+			const connected = adb.devices.find((d) => d.state === 'Device');
+
+			if (connected) {
+				if (!adb.serial || adb.serial !== connected.serial) {
+					adb.serial = connected.serial;
+					await navigateAdb(adb.path);
+				}
+			} else {
+				adb.serial = null;
+				adb.files = [];
 			}
 		});
-
-		navigateDesktop(desktop.path);
 
 		return () => {
 			unlisten.then((f) => f());
@@ -306,6 +316,9 @@
 						/>
 						<span class="truncate">{file.name}</span>
 					</div>
+					{#if file.has_permission === false}
+						<Lock size={12} class="text-muted-foreground" />
+					{/if}
 				</button>
 
 				{#if file.has_permission !== false}
@@ -324,9 +337,9 @@
 								title={type === 'desktop' ? 'Push to Device' : 'Pull from Device'}
 							>
 								{#if type === 'desktop'}
-								<ArrowRight size={14} />
+									<ArrowRight size={14} />
 								{:else}
-								<ArrowLeft size={14} />
+									<ArrowLeft size={14} />
 								{/if}
 							</Button>
 						{/if}
@@ -334,7 +347,7 @@
 						<Button
 							variant="ghost"
 							size="icon"
-							class="text-destructive hover:text-white h-7 w-7 cursor-pointer"
+							class="text-destructive h-7 w-7 cursor-pointer hover:text-white"
 							onclick={(e) => {
 								e.stopPropagation();
 								deleteFile(file, type);
