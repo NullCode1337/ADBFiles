@@ -9,6 +9,7 @@
 	import { ModeWatcher, toggleMode } from 'mode-watcher';
 	import { onMount } from 'svelte';
 
+	import { parsePath } from "$lib/utils/pathUtils";
 	import Navigation from '$lib/components/Navigation.svelte';
 	import VirtualList from '$lib/components/VirtualList.svelte';
 	import FileDropper from "$lib/components/FileDropper.svelte";
@@ -51,40 +52,12 @@
 	);
 	let showPartitionMenu = $state(false);
 
-	function createSegments(path: string, type: 'desktop' | 'adb') {
-		const normalized = path.replace(/\\/g, '/');
-		const parts = normalized.split('/').filter(Boolean);
+	const desktopInfo = $derived(parsePath(desktop.path, 'desktop'));
+	const adbInfo = $derived(parsePath(adb.path, 'adb'));
 
-		const win = path.includes(':\\') || path.match(/^[a-zA-Z]:/);
-		const rootName = win && parts.length > 0 ? parts[0] : 'root';
-		const rootPath = win && parts.length > 0 ? parts[0] + '\\' : '/';
-
-		const segments = parts
-			.map((curr, i) => {
-				if (win && i === 0) return null;
-				const subParts = parts.slice(0, i + 1);
-				let fullPath;
-
-				if (type === 'desktop' && win) {
-					fullPath = subParts.join('\\');
-					if (fullPath.length === 2 && fullPath.endsWith(':')) fullPath += '\\';
-				} else {
-					fullPath = '/' + subParts.join('/');
-				}
-
-				return { name: curr, path: fullPath };
-			})
-			.filter(Boolean) as { name: string; path: string }[];
-
-		return [{ name: rootName, path: rootPath }, ...segments];
-	}
-
-	const desktopSegments = $derived(createSegments(desktop.path, 'desktop'));
 	const visibleDesktopFiles = $derived(
 		showHidden ? desktop.files : desktop.files.filter((f) => !f.name.startsWith('.'))
 	);
-
-	const adbSegments = $derived(createSegments(adb.path, 'adb'));
 	const visibleAdbFiles = $derived(
 		showHidden ? adb.files : adb.files.filter((f) => !f.name.startsWith('.'))
 	);
@@ -318,7 +291,6 @@
 <ModeWatcher />
 
 <FileDropper 
-    adbPath={adb.path} 
     adbSerial={adb.serial} 
     onOpen={dropOpen}
     onPush={dropPush}
@@ -462,7 +434,8 @@
 					<div class="flex items-center gap-2">
 						<Navigation
 							currentPath={desktop.path}
-							segments={desktopSegments}
+							segments={desktopInfo.segments}
+							parentPath={desktopInfo.parent}
 							onNavigate={navigateDesktop}
 							type="desktop"
 						/>
@@ -494,7 +467,8 @@
 
 						<Navigation
 							currentPath={adb.path}
-							segments={adbSegments}
+							segments={adbInfo.segments}
+							parentPath={adbInfo.parent}
 							onNavigate={navigateAdb}
 							type="adb"
 							disabled={!adb.serial}

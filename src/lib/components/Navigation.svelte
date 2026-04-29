@@ -3,40 +3,19 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Button } from '$lib/components/ui/button';
 
-	let { currentPath, segments, onNavigate, type, disabled = false } = $props();
-
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	let { currentPath, segments, parentPath, onNavigate, type, disabled = false } = $props();
 	const alias_zero = (name: string) => (type === 'adb' && name === '0' ? 'sdcard' : name);
 
-	function goUp() {
-		const win = /^[a-zA-Z]:[\\/]/.test(currentPath);
-
-		const normalized = currentPath.replace(/\\/g, '/');
-		const parts = normalized.split('/').filter(Boolean);
-
-		if (win) {
-			if (parts.length <= 1) {
-				return;
-			}
-			parts.pop();
-			let newPath = parts.join('\\');
-			if (parts.length === 1 && newPath.endsWith(':')) {
-				newPath += '\\';
-			}
-			onNavigate(newPath);
-		} else {
-			if (parts.length <= 0 || currentPath === '/') return;
-			parts.pop();
-			onNavigate('/' + parts.join('/'));
-		}
-	}
-
-	const displayLabel = $derived(() => {
-		const win = currentPath.includes('\\');
-		const sep = win ? '\\' : '/';
-		if (currentPath === '/' || (win && currentPath.length <= 3)) return 'root';
-		const lastPart = currentPath.split(sep).filter(Boolean).pop();
-		return alias_zero(lastPart || 'root');
-	});
+    function goUp() {
+        if (parentPath) onNavigate(parentPath);
+    }
+    
+    const displayLabel = $derived(() => {
+        if (segments.length === 0) return 'root';
+        const last = segments[segments.length - 1];
+        return (type === 'adb' && last.name === '0') ? 'sdcard' : last.name;
+    });
 </script>
 
 <div class="flex items-center gap-2">

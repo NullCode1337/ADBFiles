@@ -2,10 +2,13 @@
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { Folder, ArrowRight, X } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { onMount } from 'svelte';
 
-	let { adbPath, adbSerial, onOpen, onPush } = $props<{
-		adbPath: string;
+	import { onMount } from 'svelte';
+	import { invoke } from '@tauri-apps/api/core';
+
+	import { parsePath } from '$lib/utils/pathUtils';
+
+	let { adbSerial, onOpen, onPush } = $props<{
 		adbSerial: string | null;
 		onOpen: (path: string, isDir: boolean) => Promise<void>;
 		onPush: (path: string, name: string, isDir: boolean) => Promise<void>;
@@ -21,8 +24,12 @@
 		const unlisten = getCurrentWindow().onDragDropEvent(async (event) => {
 			if (event.payload.type === 'drop') {
 				const path = event.payload.paths[0];
-				const name = path.split(/[/\\]/).pop() || path;
-				const isDir = !name.includes('.');
+
+				const { segments } = parsePath(path, 'desktop');
+				const lastSegment = segments[segments.length - 1];
+				
+				const name = lastSegment.name;
+				const isDir = await invoke<boolean>('is_directory', { path });
 
 				if (isDir && !adbSerial) {
 					await onOpen(path, true);
