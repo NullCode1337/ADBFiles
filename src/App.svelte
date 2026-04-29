@@ -191,6 +191,8 @@
 				});
 				await navigateAdb(adb.path);
 			}
+
+			await invoke('notify', { body: `Deleted ${file.name} successfully` });
 		} catch (err) {
 			alert(`Delete failed: ${err}`);
 		}
@@ -208,6 +210,7 @@
 					isDir: file.is_dir
 				});
 				await navigateAdb(adb.path);
+				await invoke('notify', { body: `Pushed ${file.name} to device.` });
 			} else {
 				await invoke('adb_pull', {
 					serial: adb.serial,
@@ -216,6 +219,7 @@
 					isDir: file.is_dir
 				});
 				await navigateDesktop(desktop.path);
+				await invoke('notify', { body: `Pulled ${file.name} from device.` });
 			}
 		} catch (err) {
 			console.log(err);
@@ -253,6 +257,7 @@
                 isDir: isDir
             });
             await navigateAdb(adb.path);
+			await invoke('notify', { body: `Pushed ${name} to device.` });
         } catch (err) {
             alert(`Transfer failed: ${err}`);
         }
