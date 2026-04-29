@@ -4,6 +4,7 @@ mod commands;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 commands::adb::adb_polling(app.handle().clone());
@@ -15,12 +16,9 @@ pub fn run() {
             }
             Ok(())
         })
-        .manage(crate::commands::adb::AdbState(
-            std::sync::Arc::new(
-                std::sync::Mutex::new(
-                    adb_client::server::ADBServer::default(),
-                )
-            )))
+        .manage(crate::commands::adb::AdbState(std::sync::Arc::new(
+            std::sync::Mutex::new(adb_client::server::ADBServer::default()),
+        )))
         .invoke_handler(tauri::generate_handler![
             commands::adb::adb_pull,
             commands::adb::adb_push,
@@ -29,8 +27,10 @@ pub fn run() {
             commands::adb::list_adb_devices,
             commands::adb::list_adb_directory,
             commands::file::delete_desktop_file,
+            commands::file::is_directory,
             commands::file::list_directory,
             commands::file::list_partitions,
+            commands::utils::notify,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

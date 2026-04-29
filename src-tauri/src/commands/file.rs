@@ -33,6 +33,11 @@ pub async fn delete_desktop_file(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn is_directory(path: &str) -> bool {
+    std::path::Path::new(&path).is_dir()
+}
+
+#[tauri::command]
 pub async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
     tokio::task::spawn_blocking(move || {
         let target_path = if path.is_empty() {

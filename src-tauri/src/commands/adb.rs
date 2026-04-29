@@ -1,4 +1,4 @@
-use adb_client::{ADBDeviceExt, server::ADBServer};
+use adb_client::{server::ADBServer, ADBDeviceExt};
 use std::sync::Arc;
 use tauri::Emitter;
 use tokio::task::spawn_blocking;
@@ -32,7 +32,11 @@ impl AdbPath {
     }
 
     fn trail(path: &str) -> String {
-        if path.ends_with('/') { path.to_string() } else { format!("{path}/") }
+        if path.ends_with('/') {
+            path.to_string()
+        } else {
+            format!("{path}/")
+        }
     }
 }
 
@@ -40,7 +44,7 @@ pub fn adb_polling(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         loop {
             let app = app.clone();
-            let _ = spawn_blocking(move || {                
+            let _ = spawn_blocking(move || {
                 let _ = ADBServer::default().track_devices(|device| {
                     println!("{device:#?}");
                     let device_obj = DeviceObj {
@@ -48,10 +52,11 @@ pub fn adb_polling(app: tauri::AppHandle) {
                         state: device.state.to_string(),
                     };
 
-                    let _ = app.emit("adb_update", vec![device_obj]); 
+                    let _ = app.emit("adb_update", vec![device_obj]);
                     Ok(())
                 });
-            }).await;
+            })
+            .await;
 
             // Wait a bit before re-loop if tracker exits
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
@@ -183,16 +188,25 @@ pub async fn adb_push(
         let lock = Arc::clone(&state.0);
         spawn_blocking(move || {
             let mut server = lock.lock().map_err(|_| "Poisoned lock")?;
-            let mut device = server.get_device_by_name(&serial).map_err(|e| e.to_string())?;
+            let mut device = server
+                .get_device_by_name(&serial)
+                .map_err(|e| e.to_string())?;
 
-            let file_name = std::path::Path::new(&src).file_name().ok_or("Invalid path")?.to_string_lossy();
+            let file_name = std::path::Path::new(&src)
+                .file_name()
+                .ok_or("Invalid path")?
+                .to_string_lossy();
             let dest_path = AdbPath::join(&dest, &file_name);
 
             let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
             let mut reader = std::io::BufReader::new(file);
-            device.push(&mut reader, &dest_path).map_err(|e| e.to_string())?;
+            device
+                .push(&mut reader, &dest_path)
+                .map_err(|e| e.to_string())?;
             Ok(())
-        }).await.map_err(|e| e.to_string())?
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
 }
 
@@ -214,15 +228,23 @@ pub async fn adb_pull(
         let lock = Arc::clone(&state.0);
         spawn_blocking(move || {
             let mut server = lock.lock().map_err(|_| "Poisoned lock")?;
-            let mut device = server.get_device_by_name(&serial).map_err(|e| e.to_string())?;
+            let mut device = server
+                .get_device_by_name(&serial)
+                .map_err(|e| e.to_string())?;
 
-            let file_name = src.trim_end_matches('/').split('/').next_back().ok_or("Invalid path")?;
+            let file_name = src
+                .trim_end_matches('/')
+                .split('/')
+                .next_back()
+                .ok_or("Invalid path")?;
             let dest_path = std::path::Path::new(&dest).join(file_name);
 
             let file = std::fs::File::create(&dest_path).map_err(|e| e.to_string())?;
             let mut writer = std::io::BufWriter::new(file);
             device.pull(&src, &mut writer).map_err(|e| e.to_string())?;
             Ok(())
-        }).await.map_err(|e| e.to_string())?
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
 }
