@@ -93,3 +93,20 @@ pub async fn list_partitions() -> Vec<Partition> {
         })
         .collect()
 }
+
+#[tauri::command]
+pub async fn open_file(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let cmd = "explorer";
+    #[cfg(target_os = "macos")]
+    let cmd = "open";
+    #[cfg(target_os = "linux")]
+    let cmd = "xdg-open";
+
+    std::process::Command::new(cmd)
+        .arg(path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    
+    Ok(())
+}

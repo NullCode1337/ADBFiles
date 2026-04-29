@@ -30,6 +30,7 @@ pub fn run() {
             commands::file::is_directory,
             commands::file::list_directory,
             commands::file::list_partitions,
+            commands::file::open_file,
             commands::utils::notify,
         ])
         .run(tauri::generate_context!())

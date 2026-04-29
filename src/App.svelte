@@ -6,6 +6,8 @@
 
 	import { invoke } from '@tauri-apps/api/core';
 	import { listen } from '@tauri-apps/api/event';
+	import { join, tempDir } from '@tauri-apps/api/path';
+
 	import { ModeWatcher, toggleMode } from 'mode-watcher';
 	import { onMount } from 'svelte';
 
@@ -146,6 +148,34 @@
 			adb.path = path;
 		} catch (err) {
 			console.error(err);
+		}
+	}
+
+	async function onClick(file: File, type: 'desktop' | 'adb') {
+		if (file.is_dir) return; 
+
+		try {
+			if (type === 'desktop') {
+				await invoke('open_file', { path: file.path });
+			} else {
+				if (!adb.serial) return;
+
+				const tempPath = await tempDir();
+				await invoke('adb_pull', {
+					serial: adb.serial,
+					src: file.path,
+					dest: tempPath,
+					isDir: false
+				});
+
+				const localPath = await join(tempPath, file.name);
+
+				await invoke('open_file', { path: localPath });
+				await invoke('notify', { body: `Opened ${file.name}`});
+			}
+		} catch (err) {
+			console.error('Failed to open file:', err);
+			alert(`Could not open file: ${err}`);
 		}
 	}
 
@@ -310,7 +340,13 @@
 			{@const Icon = getFileIcon(file)}
 			<div class="group flex h-full items-center gap-1 px-4">
 				<button
-					onclick={() => file.is_dir && (file.has_permission ?? true) && onNavigate(file.path)}
+					onclick={() => {
+						if (file.is_dir && (file.has_permission ?? true)) {
+							onNavigate(file.path);
+						} else {
+							onClick(file, type);
+						}
+					}}
 					disabled={file.has_permission === false}
 					class="flex min-w-0 flex-1 items-center rounded-md p-1.5 text-sm transition-colors
                     {(file.has_permission ?? true)
