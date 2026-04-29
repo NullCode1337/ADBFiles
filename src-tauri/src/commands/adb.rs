@@ -24,16 +24,19 @@ struct AdbPath;
 impl AdbPath {
     fn join(base: &str, name: &str) -> String {
         let base = base.trim_end_matches('/');
-        let name = name.trim_start_matches('/');
-        if base.is_empty() {
-            format!("/{name}")
-        } else {
-            format!("{base}/{name}")
-        }
+        format!("{base}/{name}")
     }
 
     fn escape(path: &str) -> String {
-        format!("'{}'", path.replace('\'', "'\\''"))
+        path.replace('\'', "'\\''")
+    }
+
+    fn trail(path: &str) -> String {
+        if path.ends_with('/') {
+            path.to_string()
+        } else {
+            format!("{path}/")
+        }
     }
 }
 
@@ -135,6 +138,7 @@ pub async fn list_adb_directory(
             .map_err(|e| e.to_string())?;
 
         let output_str = String::from_utf8_lossy(&output);
+        let base_path = AdbPath::trail(&path);
 
         let files = output_str
             .lines()
@@ -153,7 +157,7 @@ pub async fn list_adb_directory(
 
                 Some(AdbFileEntry {
                     is_hidden: name.starts_with('.'),
-                    path: AdbPath::join(&path, &name),
+                    path: AdbPath::join(&base_path, &name),
                     name,
                     is_dir,
                 })
