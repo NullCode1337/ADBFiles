@@ -228,14 +228,13 @@
 	}
 
 	$effect(() => {
-		if (activeDevice) {
-			if (adb.serial !== activeDevice.serial || adb.files.length === 0) {
-				adb.serial = activeDevice.serial;
+		const serial = activeDevice?.serial ?? null;
+		
+		if (serial !== adb.serial) {
+			adb.serial = serial;
+			if (serial) {
 				navigateAdb(adb.path);
-			}
-		} else {
-			if (adb.serial !== null) {
-				adb.serial = null;
+			} else {
 				adb.files = [];
 			}
 		}
