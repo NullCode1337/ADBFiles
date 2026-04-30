@@ -58,10 +58,29 @@
 	const adbInfo = $derived(parsePath(adb.path, 'adb'));
 
 	const visibleDesktopFiles = $derived(
-		showHidden ? desktop.files : desktop.files.filter((f) => !f.name.startsWith('.'))
+		(() => {
+			let list = showHidden ? desktop.files : desktop.files.filter((f) => !f.name.startsWith('.'));
+			
+			if (desktopInfo.parent) {
+				list = [{ 
+					name: '..', 
+					path: desktopInfo.parent, 
+					is_dir: true, 
+					has_permission: true 
+				} as File, ...list];
+			}
+			return list;
+		})()
 	);
+
 	const visibleAdbFiles = $derived(
-		showHidden ? adb.files : adb.files.filter((f) => !f.name.startsWith('.'))
+		(() => {
+			const list = showHidden ? adb.files : adb.files.filter((f) => !f.name.startsWith('.'));
+			if (adb.path !== '/' && adb.path !== '') {
+				return [{ name: '..', path: adbInfo.parent || '/', is_dir: true, has_permission: true }, ...list];
+			}
+			return list;
+		})()
 	);
 
 	const partLabel = $derived(() => {
@@ -105,6 +124,7 @@
 	}
 
 	function getFileIcon(file: File) {
+		if (file.name === '..') return ArrowLeft;
 		if (file.is_dir) return Folder;
 		const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
 		const maps = {
@@ -369,7 +389,7 @@
 					{/if}
 				</button>
 
-				{#if file.has_permission !== false}
+				{#if file.has_permission !== false && file.name !== '..'}
 					<div
 						class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
 					>
