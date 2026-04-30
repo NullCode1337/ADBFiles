@@ -6,8 +6,6 @@
 	import { onMount } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
 
-	import { parsePath } from '$lib/utils/pathUtils';
-
 	let { adbSerial, onOpen, onPush } = $props<{
 		adbSerial: string | null;
 		onOpen: (path: string, isDir: boolean) => Promise<void>;
@@ -25,10 +23,7 @@
 			if (event.payload.type === 'drop') {
 				const path = event.payload.paths[0];
 
-				const { segments } = parsePath(path, 'desktop');
-				const lastSegment = segments[segments.length - 1];
-				
-				const name = lastSegment.name;
+				const name = path.split(/[\\/]/).filter(Boolean).pop() || path;
 				const isDir = await invoke<boolean>('is_directory', { path });
 
 				if (isDir && !adbSerial) {
@@ -78,7 +73,7 @@
 				{#if pendingDrop.isDir}
 					<Button
 						variant="outline"
-						class="w-full justify-start"
+						class="w-full cursor-pointer justify-start"
 						onclick={() => {
 							onOpen(pendingDrop!.path, true);
 							close();
@@ -91,7 +86,7 @@
 
 				<div class={!adbSerial ? 'w-full cursor-not-allowed' : 'w-full'}>
 					<Button
-						class="w-full justify-start bg-blue-600 text-white hover:bg-blue-700"
+						class="w-full cursor-pointer justify-start bg-blue-600 text-white hover:bg-blue-700"
 						disabled={!adbSerial}
 						onclick={() => {
 							onPush(pendingDrop!.path, pendingDrop!.name, pendingDrop!.isDir);
@@ -103,7 +98,7 @@
 					</Button>
 				</div>
 
-				<Button variant="ghost" class="w-full" onclick={close}>Cancel</Button>
+				<Button variant="ghost" class="w-full cursor-pointer" onclick={close}>Cancel</Button>
 			</div>
 		</div>
 	</div>

@@ -7,15 +7,15 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { listen } from '@tauri-apps/api/event';
 	import { join, tempDir } from '@tauri-apps/api/path';
+	import { platform } from '@tauri-apps/plugin-os';
 
 	import { ModeWatcher, toggleMode } from 'mode-watcher';
 	import { onMount } from 'svelte';
 
-	import { parsePath } from "$lib/utils/pathUtils";
 	import Navigation from '$lib/components/Navigation.svelte';
 	import VirtualList from '$lib/components/VirtualList.svelte';
-	import FileDropper from "$lib/components/FileDropper.svelte";
-	
+	import FileDropper from '$lib/components/FileDropper.svelte';
+
 	interface File {
 		name: string;
 		path: string;
@@ -33,18 +33,24 @@
 		mount_point: string;
 	}
 
+	interface PathMetadata {
+		segments: Array<{ name: string; path: string }>;
+		parent: string | null;
+	}
+
 	let desktop = $state({
-		path: localStorage.getItem('lastDesktopPath') ?? '/',
-		files: [] as File[]
+		path: localStorage.getItem('lastDesktopPath') ?? '',
+		files: [] as File[],
+		meta: { segments: [], parent: null } as PathMetadata
 	});
 
 	let adb = $state({
 		path: '/storage/emulated/0',
 		files: [] as File[],
 		serial: null as string | null,
-		devices: [] as DeviceObj[]
+		devices: [] as DeviceObj[],
+		meta: { segments: [], parent: null } as PathMetadata
 	});
-
 	const activeDevice = $derived(adb.devices.find((d) => d.state === 'device'));
 
 	let showHidden = $state(false);
@@ -54,20 +60,20 @@
 	);
 	let showPartitionMenu = $state(false);
 
-	const desktopInfo = $derived(parsePath(desktop.path, 'desktop'));
-	const adbInfo = $derived(parsePath(adb.path, 'adb'));
-
 	const visibleDesktopFiles = $derived(
 		(() => {
 			let list = showHidden ? desktop.files : desktop.files.filter((f) => !f.name.startsWith('.'));
-			
-			if (desktopInfo.parent) {
-				list = [{ 
-					name: '..', 
-					path: desktopInfo.parent, 
-					is_dir: true, 
-					has_permission: true 
-				} as File, ...list];
+
+			if (desktop.meta.parent) {
+				list = [
+					{
+						name: '..',
+						path: desktop.meta.parent,
+						is_dir: true,
+						has_permission: true
+					} as File,
+					...list
+				];
 			}
 			return list;
 		})()
@@ -75,9 +81,18 @@
 
 	const visibleAdbFiles = $derived(
 		(() => {
-			const list = showHidden ? adb.files : adb.files.filter((f) => !f.name.startsWith('.'));
-			if (adb.path !== '/' && adb.path !== '') {
-				return [{ name: '..', path: adbInfo.parent || '/', is_dir: true, has_permission: true }, ...list];
+			let list = showHidden ? adb.files : adb.files.filter((f) => !f.name.startsWith('.'));
+
+			if (adb.meta.parent) {
+				list = [
+					{
+						name: '..',
+						path: adb.meta.parent,
+						is_dir: true,
+						has_permission: true
+					} as File,
+					...list
+				];
 			}
 			return list;
 		})()
@@ -142,9 +157,14 @@
 
 	async function navigateDesktop(path: string) {
 		try {
-			const result = await invoke<File[]>('list_directory', { path });
-			desktop.files = result;
+			const [files, meta] = await Promise.all([
+				invoke<File[]>('list_directory', { path }),
+				invoke<PathMetadata>('get_path_metadata', { path, isAdb: false })
+			]);
+
+			desktop.files = files;
 			desktop.path = path;
+			desktop.meta = meta;
 			localStorage.setItem('lastDesktopPath', path);
 
 			const ownerPartition = partitions
@@ -155,24 +175,35 @@
 				partitionHistory[ownerPartition.mount_point] = path;
 				localStorage.setItem('partitionHistory', JSON.stringify(partitionHistory));
 			}
-		} catch (err) {
-			console.error(err);
+		} catch (err: unknown) {
+			const error = err instanceof Error ? err.message : String(err);
+			if (error.includes('os error 2')) {
+				const root = (await platform()) === 'windows' ? 'C:\\' : '/';
+				if (path !== root) await navigateDesktop(root);
+			} else {
+				alert(`Error: ${error}`);
+			}
 		}
 	}
 
 	async function navigateAdb(path: string) {
 		if (!adb.serial) return;
 		try {
-			const result = await invoke<File[]>('list_adb_directory', { serial: adb.serial, path });
-			adb.files = result;
+			const [files, meta] = await Promise.all([
+				invoke<File[]>('list_adb_directory', { serial: adb.serial, path }),
+				invoke<PathMetadata>('get_path_metadata', { path, isAdb: true })
+			]);
+
+			adb.files = files;
 			adb.path = path;
+			adb.meta = meta;
 		} catch (err) {
-			console.error(err);
+			console.error('ADB Navigation failed:', err);
 		}
 	}
 
 	async function onClick(file: File, type: 'desktop' | 'adb') {
-		if (file.is_dir) return; 
+		if (file.is_dir) return;
 
 		try {
 			if (type === 'desktop') {
@@ -191,7 +222,7 @@
 				const localPath = await join(tempPath, file.name);
 
 				await invoke('open_file', { path: localPath });
-				await invoke('notify', { body: `Opened ${file.name}`});
+				await invoke('notify', { body: `Opened ${file.name}` });
 			}
 		} catch (err) {
 			console.error('Failed to open file:', err);
@@ -279,7 +310,7 @@
 
 	$effect(() => {
 		const serial = activeDevice?.serial ?? null;
-		
+
 		if (serial !== adb.serial) {
 			adb.serial = serial;
 			if (serial) {
@@ -291,31 +322,39 @@
 	});
 
 	async function dropOpen(path: string, isDir: boolean) {
-        if (isDir) {
-            await navigateDesktop(path);
-        }
-    }
+		if (isDir) {
+			await navigateDesktop(path);
+		}
+	}
 
-    async function dropPush(path: string, name: string, isDir: boolean) {
-        if (!adb.serial) return;
-        try {
-            await invoke('adb_push', {
-                serial: adb.serial,
-                src: path,
-                dest: adb.path,
-                isDir: isDir
-            });
-            await navigateAdb(adb.path);
+	async function dropPush(path: string, name: string, isDir: boolean) {
+		if (!adb.serial) return;
+		try {
+			await invoke('adb_push', {
+				serial: adb.serial,
+				src: path,
+				dest: adb.path,
+				isDir: isDir
+			});
+			await navigateAdb(adb.path);
 			await invoke('notify', { body: `Pushed ${name} to device.` });
-        } catch (err) {
-            alert(`Transfer failed: ${err}`);
-        }
-    }
+		} catch (err) {
+			alert(`Transfer failed: ${err}`);
+		}
+	}
 
 	onMount(() => {
-		fetchPartitions();
-		navigateDesktop(desktop.path);
-
+		const setup = async() => {
+			if (!desktop.path) {
+				const p = await platform();
+				desktop.path = p === 'windows' ? 'C:\\' : '/';
+			}
+			fetchPartitions();
+			navigateDesktop(desktop.path);
+		}
+	
+		setup();
+		
 		// Refresh ADB once before polling as no update when device pre-connected
 		refreshDevices();
 		// ADB Polling (rust backend sends event)
@@ -493,9 +532,8 @@
 					</div>
 					<div class="flex items-center gap-2">
 						<Navigation
-							currentPath={desktop.path}
-							segments={desktopInfo.segments}
-							parentPath={desktopInfo.parent}
+							segments={desktop.meta.segments}
+							parentPath={desktop.meta.parent}
 							onNavigate={navigateDesktop}
 							type="desktop"
 						/>
@@ -526,9 +564,8 @@
 						</Button>
 
 						<Navigation
-							currentPath={adb.path}
-							segments={adbInfo.segments}
-							parentPath={adbInfo.parent}
+							segments={adb.meta.segments}
+							parentPath={adb.meta.parent}
 							onNavigate={navigateAdb}
 							type="adb"
 							disabled={!adb.serial}

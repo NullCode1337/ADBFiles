@@ -3,23 +3,24 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Button } from '$lib/components/ui/button';
 
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	let { currentPath, segments, parentPath, onNavigate, type, disabled = false } = $props();
+	let { segments, parentPath, onNavigate, type, disabled = false } = $props();
 	const alias_zero = (name: string) => (type === 'adb' && name === '0' ? 'sdcard' : name);
 
-    function goUp() {
-        if (parentPath) onNavigate(parentPath);
-    }
-    
-    const displayLabel = $derived(() => {
-        if (segments.length === 0) return 'root';
-        const last = segments[segments.length - 1];
-        return (type === 'adb' && last.name === '0') ? 'sdcard' : last.name;
-    });
+	const displayLabel = $derived(() => {
+		if (!segments || segments.length === 0) return 'root';
+		const last = segments[segments.length - 1];
+		return alias_zero(last.name);
+	});
 </script>
 
 <div class="flex items-center gap-2">
-	<Button variant="ghost" size="icon" class="h-7 w-7" {disabled} onclick={goUp}>
+	<Button
+		variant="ghost"
+		size="icon"
+		class="h-7 w-7 cursor-pointer"
+		disabled={disabled || !parentPath}
+		onclick={() => onNavigate(parentPath)}
+	>
 		<ChevronUp size={14} />
 	</Button>
 
@@ -29,7 +30,7 @@
 				<Button
 					{...props}
 					variant="secondary"
-					class="h-7 max-w-37.5 truncate px-2 font-mono text-[10px]"
+					class="h-7 max-w-37.5 cursor-pointer truncate px-2 font-mono text-[10px]"
 				>
 					{displayLabel()}
 				</Button>
