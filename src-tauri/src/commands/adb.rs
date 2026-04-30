@@ -46,7 +46,6 @@ pub fn adb_polling(app: tauri::AppHandle) {
             let app = app.clone();
             let _ = spawn_blocking(move || {
                 let _ = ADBServer::default().track_devices(|device| {
-                    println!("{device:#?}");
                     let device_obj = DeviceObj {
                         serial: device.identifier,
                         state: device.state.to_string(),
@@ -101,16 +100,22 @@ pub async fn launch_scrcpy(serial: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn list_adb_devices(state: tauri::State<'_, AdbState>) -> Result<Vec<DeviceObj>, String> {
-    let mut server = state.0.lock().unwrap();
-    let devices = server.devices().map_err(|e| e.to_string())?;
+    let lock = Arc::clone(&state.0);
 
-    Ok(devices
-        .into_iter()
-        .map(|d| DeviceObj {
-            serial: d.identifier,
-            state: d.state.to_string(),
-        })
-        .collect())
+    spawn_blocking(move || {
+        let mut server = lock.lock().map_err(|_| "Poisoned lock".to_string())?;
+        let devices = server.devices().map_err(|e| e.to_string())?;
+
+        Ok(devices
+            .into_iter()
+            .map(|d| DeviceObj {
+                serial: d.identifier,
+                state: d.state.to_string(),
+            })
+            .collect())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -131,7 +136,7 @@ pub async fn list_adb_directory(
 
         device
             .shell_command(
-                &format!("ls -1apF '{}'", AdbPath::escape(&path)),
+                &format!("ls -1ap '{}'", AdbPath::escape(&path)),
                 Some(&mut output),
                 None,
             )
@@ -153,7 +158,7 @@ pub async fn list_adb_directory(
                 }
 
                 let is_dir = line.ends_with('/');
-                let name = line.trim_end_matches(['/', '*', '@', '|', '=']).to_string();
+                let name = line.trim_end_matches('/').to_string();
 
                 Some(AdbFileEntry {
                     is_hidden: name.starts_with('.'),
@@ -179,9 +184,10 @@ pub async fn adb_push(
     is_dir: bool,
 ) -> Result<(), String> {
     if is_dir {
-        std::process::Command::new("adb")
+        tokio::process::Command::new("adb")
             .args(["-s", &serial, "push", &src, &dest])
             .output()
+            .await
             .map_err(|e| format!("Folder push failed: {e}"))?;
         Ok(())
     } else {
@@ -219,9 +225,10 @@ pub async fn adb_pull(
     is_dir: bool,
 ) -> Result<(), String> {
     if is_dir {
-        std::process::Command::new("adb")
+        tokio::process::Command::new("adb")
             .args(["-s", &serial, "pull", &src, &dest])
             .output()
+            .await
             .map_err(|e| format!("Folder pull failed: {e}"))?;
         Ok(())
     } else {
@@ -241,7 +248,11 @@ pub async fn adb_pull(
 
             let file = std::fs::File::create(&dest_path).map_err(|e| e.to_string())?;
             let mut writer = std::io::BufWriter::new(file);
-            device.pull(&src, &mut writer).map_err(|e| e.to_string())?;
+            if let Err(e) = device.pull(&src, &mut writer) {
+                let _ = std::fs::remove_file(&dest_path);
+                return Err(e.to_string());
+            }
+
             Ok(())
         })
         .await

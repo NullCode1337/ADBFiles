@@ -14,7 +14,7 @@ pub struct PathMetadata {
 }
 
 #[tauri::command]
-pub fn get_path_metadata(path: String, is_adb: bool) -> PathMetadata {
+pub fn get_path_metadata(path: &str, is_adb: bool) -> PathMetadata {
     let mut segments = Vec::new();
     let path_obj = Path::new(&path);
 
