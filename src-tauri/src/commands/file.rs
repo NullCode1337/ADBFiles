@@ -107,6 +107,6 @@ pub async fn open_file(path: String) -> Result<(), String> {
         .arg(path)
         .spawn()
         .map_err(|e| e.to_string())?;
-    
+
     Ok(())
 }
