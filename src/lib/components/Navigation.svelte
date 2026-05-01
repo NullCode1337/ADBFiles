@@ -7,9 +7,7 @@
 	const alias_zero = (name: string) => (type === 'adb' && name === '0' ? 'sdcard' : name);
 
 	const displayLabel = $derived(
-		segments && segments.length > 0 
-			? alias_zero(segments[segments.length - 1].name) 
-			: 'root'
+		segments && segments.length > 0 ? alias_zero(segments[segments.length - 1].name) : 'root'
 	);
 </script>
 
