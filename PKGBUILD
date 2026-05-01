@@ -38,8 +38,4 @@ build() {
 package() {
   cd "${pkgname}"
   cp -a src-tauri/target/release/bundle/deb/adbfiles_*_*/data/* "${pkgdir}/"
-  
-  if [ -f "${pkgdir}/usr/bin/gallery-dl" ]; then
-    rm "${pkgdir}/usr/bin/gallery-dl" 
-  fi
 }
