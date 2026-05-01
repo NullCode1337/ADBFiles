@@ -6,11 +6,11 @@
 	let { segments, parentPath, onNavigate, type, disabled = false } = $props();
 	const alias_zero = (name: string) => (type === 'adb' && name === '0' ? 'sdcard' : name);
 
-	const displayLabel = $derived(() => {
-		if (!segments || segments.length === 0) return 'root';
-		const last = segments[segments.length - 1];
-		return alias_zero(last.name);
-	});
+	const displayLabel = $derived(
+		segments && segments.length > 0 
+			? alias_zero(segments[segments.length - 1].name) 
+			: 'root'
+	);
 </script>
 
 <div class="flex items-center gap-2">
@@ -32,7 +32,7 @@
 					variant="secondary"
 					class="h-7 max-w-37.5 cursor-pointer truncate px-2 font-mono text-[10px]"
 				>
-					{displayLabel()}
+					{displayLabel}
 				</Button>
 			{/snippet}
 		</DropdownMenu.Trigger>
