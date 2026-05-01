@@ -2,7 +2,7 @@
 	import { ArrowRight, ArrowLeft, Lock, Trash2 } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import VirtualList from '$lib/components/VirtualList.svelte';
-	import { getFileIcon } from '$lib/utils/icons';
+	import { getFileIcon } from '$lib/icons';
 	import { fm } from '$lib/stores/fileManager.svelte';
 	import type { FileItem } from '$lib/types';
 
