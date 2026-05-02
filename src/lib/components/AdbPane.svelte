@@ -3,16 +3,32 @@
 	import { Button } from '$lib/components/ui/button';
 	import Navigation from '$lib/components/Navigation.svelte';
 	import FileList from '$lib/components/FileList.svelte';
+	import DropdownMenu from '$lib/components/DropdownMenu.svelte';
 	import { fm } from '$lib/stores/fileManager.svelte';
 </script>
 
 <div class="bg-muted/5 flex h-full min-h-0 flex-col">
 	<!-- Header -->
 	<div class="bg-background flex h-14 shrink-0 items-center justify-between border-b p-4">
-		<div class="flex items-center gap-2">
-			<Smartphone size={18} class="text-green-500" />
-			<span class="text-sm font-semibold">{fm.adb.name}</span>
-		</div>
+		<DropdownMenu
+			label={fm.adb.name || 'No Device'}
+			title="Connected Devices"
+			activeId={fm.adb.serial}
+			icon={Smartphone}
+			items={fm.adb.devices.map((d) => ({
+				id: d.serial,
+				primary: d.name,
+				secondary: `${d.serial} (${d.state})`,
+				raw: d
+			}))}
+			onSelect={(item) => {
+				fm.adb.serial = item.id;
+				fm.adb.name = item.primary;
+				fm.navigateAdb(fm.adb.path);
+			}}
+			onwheel
+		/>
+
 		<div class="flex items-center gap-2">
 			<Button variant="ghost" size="icon" class="h-7 w-7" onclick={fm.refreshDevices}>
 				<RefreshCw size={14} />
