@@ -16,7 +16,8 @@ function createFileManagerStore() {
 		files: [] as FileItem[],
 		serial: null as string | null,
 		devices: [] as DeviceObj[],
-		meta: { segments: [], parent: null } as PathMetadata
+		meta: { segments: [], parent: null } as PathMetadata,
+		name: 'Android Device'
 	});
 
 	let showHidden = $state(false);
@@ -179,6 +180,7 @@ function createFileManagerStore() {
 			adb.devices = devices;
 			if (devices.length > 0) {
 				adb.serial = devices[0].serial;
+				adb.name = devices[0].name;
 				await navigateAdb(adb.path);
 			} else {
 				adb.serial = null;
@@ -229,16 +231,28 @@ function createFileManagerStore() {
 		await navigateDesktop(desktop.path);
 		await refreshDevices();
 
-		const unlisten = await listen<DeviceObj | DeviceObj[]>('adb_update', (event) => {
-			const payload = Array.isArray(event.payload) ? event.payload : [event.payload];
-			payload.forEach((incoming) => {
-				const index = adb.devices.findIndex((d) => d.serial === incoming.serial);
-				if (index !== -1) {
-					adb.devices[index] = { ...adb.devices[index], state: incoming.state };
+		const unlisten = await listen<DeviceObj[]>('adb_update', (event) => {
+			const devices = event.payload;
+			adb.devices = devices;
+
+			const currentDevice = devices.find((d) => d.serial === adb.serial);
+
+			if (!currentDevice || currentDevice.state !== 'device') {
+				// If the device we were browsing disconnected,
+				// try to auto-switch to the next available 'device'
+				const nextDevice = devices.find((d) => d.state === 'device');
+				if (nextDevice) {
+					adb.serial = nextDevice.serial;
+					adb.name = nextDevice.name;
+					navigateAdb(adb.path);
 				} else {
-					adb.devices.push(incoming);
+					adb.serial = null;
+					adb.name = 'No Device';
+					adb.files = [];
 				}
-			});
+			} else {
+				adb.name = currentDevice.name;
+			}
 		});
 
 		return unlisten;

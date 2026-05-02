@@ -6,6 +6,7 @@ export interface FileItem {
 }
 
 export interface DeviceObj {
+	name: string,
 	serial: string;
 	state: string;
 }

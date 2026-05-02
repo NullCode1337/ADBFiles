@@ -1,4 +1,4 @@
-use adb_client::{server::ADBServer, ADBDeviceExt};
+use adb_client::{ADBDeviceExt, server::ADBServer};
 use std::sync::Arc;
 use tauri::Emitter;
 use tokio::task::spawn_blocking;
@@ -7,6 +7,7 @@ pub struct AdbState(pub Arc<std::sync::Mutex<ADBServer>>);
 
 #[derive(serde::Serialize, Clone)]
 pub struct DeviceObj {
+    pub name: String,
     pub serial: String,
     pub state: String,
 }
@@ -45,13 +46,21 @@ pub fn adb_polling(app: tauri::AppHandle) {
         loop {
             let app = app.clone();
             let _ = spawn_blocking(move || {
-                let _ = ADBServer::default().track_devices(|device| {
-                    let device_obj = DeviceObj {
-                        serial: device.identifier,
-                        state: device.state.to_string(),
-                    };
+                let mut server = ADBServer::default();
 
-                    let _ = app.emit("adb_update", vec![device_obj]);
+                let _ = server.track_devices(|_| {
+                    let devices = ADBServer::default()
+                        .devices_long()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|d| DeviceObj {
+                            name: d.model,
+                            serial: d.identifier,
+                            state: d.state.to_string(),
+                        })
+                        .collect::<Vec<DeviceObj>>();
+
+                    let _ = app.emit("adb_update", devices);
                     Ok(())
                 });
             })
@@ -104,11 +113,12 @@ pub async fn list_adb_devices(state: tauri::State<'_, AdbState>) -> Result<Vec<D
 
     spawn_blocking(move || {
         let mut server = lock.lock().map_err(|_| "Poisoned lock".to_string())?;
-        let devices = server.devices().map_err(|e| e.to_string())?;
+        let devices = server.devices_long().map_err(|e| e.to_string())?;
 
         Ok(devices
             .into_iter()
             .map(|d| DeviceObj {
+                name: d.model,
                 serial: d.identifier,
                 state: d.state.to_string(),
             })

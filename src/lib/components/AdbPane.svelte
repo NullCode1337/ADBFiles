@@ -11,7 +11,7 @@
 	<div class="bg-background flex h-14 shrink-0 items-center justify-between border-b p-4">
 		<div class="flex items-center gap-2">
 			<Smartphone size={18} class="text-green-500" />
-			<span class="text-sm font-semibold">Android Device</span>
+			<span class="text-sm font-semibold">{fm.adb.name}</span>
 		</div>
 		<div class="flex items-center gap-2">
 			<Button variant="ghost" size="icon" class="h-7 w-7" onclick={fm.refreshDevices}>
