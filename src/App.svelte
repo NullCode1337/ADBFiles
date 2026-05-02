@@ -9,7 +9,9 @@
 	import FileDropper from '$lib/components/FileDropper.svelte';
 	import DesktopPane from '$lib/components/DesktopPane.svelte';
 	import AdbPane from '$lib/components/AdbPane.svelte';
-	import Footer from '$lib/components/Footer.svelte';
+	import Header from '$lib/components/Header.svelte';
+
+	let showDesktop = $state(false);
 
 	$effect(() => {
 		const serial = fm.activeDevice?.serial ?? null;
@@ -36,17 +38,18 @@
 <FileDropper adbSerial={fm.adb.serial} onOpen={fm.dropOpen} onPush={fm.dropPush} />
 
 <div class="bg-background flex h-screen w-screen flex-col overflow-hidden">
+	<Header bind:showDesktop />
+
 	<Resizable.PaneGroup direction="horizontal" class="flex-1">
-		<Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col">
-			<DesktopPane />
-		</Resizable.Pane>
+		{#if showDesktop}
+			<Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col">
+				<DesktopPane />
+			</Resizable.Pane>
+			<Resizable.Handle withHandle />
+		{/if}
 
-		<Resizable.Handle withHandle />
-
-		<Resizable.Pane defaultSize={50} minSize={30} class="flex flex-col">
+		<Resizable.Pane defaultSize={showDesktop ? 50 : 100} minSize={30} class="flex flex-col">
 			<AdbPane />
 		</Resizable.Pane>
 	</Resizable.PaneGroup>
-
-	<Footer />
 </div>
