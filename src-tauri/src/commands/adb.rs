@@ -269,3 +269,29 @@ pub async fn adb_pull(
         .map_err(|e| e.to_string())?
     }
 }
+
+pub async fn ctx_push(state: Arc<std::sync::Mutex<ADBServer>>, src: String) -> Result<(), String> {
+    let serial = {
+        let mut server = state.lock().map_err(|_| "Poisoned lock")?;
+        server
+            .devices()
+            .map_err(|e| e.to_string())?
+            .first()
+            .ok_or("No Android devices found")?
+            .identifier
+            .clone()
+    };
+
+    let output = tokio::process::Command::new("adb")
+        .args(["-s", &serial, "push", &src, "/sdcard/"])
+        .output()
+        .await
+        .map_err(|e| format!("ADB Command failed: {e}"))?;
+
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Push failed: {error}"));
+    }
+
+    Ok(())
+}
