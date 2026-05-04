@@ -1,9 +1,16 @@
 mod commands;
+use tauri::Emitter;
 
 #[allow(clippy::missing_panics_doc)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if argv.len() > 2 && argv[1] == "--push" {
+                let path = argv[2].clone();
+                let _ = app.emit("ctx-push", path);
+            }
+        }))
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
