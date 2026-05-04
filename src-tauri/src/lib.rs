@@ -1,14 +1,27 @@
 mod commands;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 #[allow(clippy::missing_panics_doc)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            if argv.len() > 2 && argv[1] == "--push" {
-                let path = argv[2].clone();
-                let _ = app.emit("ctx-push", path);
+            let path = argv[2].clone();
+            let handle = app.clone();
+
+            let state = handle.state::<commands::adb::AdbState>();
+            let server = std::sync::Arc::clone(&state.0);
+
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.emit("ctx-push", &path);
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            } else {
+                tauri::async_runtime::spawn(async move {
+                    let _ = commands::utils::notify(handle, format!("Pushing to Android: {path}"))
+                        .await;
+                    let _ = commands::adb::ctx_push(server, path).await;
+                });
             }
         }))
         .plugin(tauri_plugin_os::init())
