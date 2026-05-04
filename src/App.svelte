@@ -11,7 +11,13 @@
 	import AdbPane from '$lib/components/AdbPane.svelte';
 	import Header from '$lib/components/Header.svelte';
 
-	let showDesktop = $state(false);
+	let showDesktop = $state(
+		typeof window !== 'undefined' ? localStorage.getItem('showDesktop') === 'true' : false
+	);
+
+	$effect(() => {
+		localStorage.setItem('showDesktop', String(showDesktop));
+	});
 
 	$effect(() => {
 		const serial = fm.activeDevice?.serial ?? null;
